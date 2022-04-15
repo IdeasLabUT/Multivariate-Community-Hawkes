@@ -9,7 +9,7 @@ import MultiBlockFit as MBHP
 from spectral_clustering import spectral_cluster, LF_spectral_cluster, spectral_cluster1
 import matplotlib.pyplot as plt
 from sklearn.metrics import adjusted_rand_score
-import OneBlockFit
+import utils_sum_betas_bp
 
 import sys
 sys.path.append("./CHIP-Network-Model")
@@ -269,119 +269,7 @@ def get_simulation_params(n_classes, level, n_alpha, sum):
         param = (mu_sim, alpha_n_sim, alpha_r_sim, alpha_br_sim, alpha_gr_sim, alpha_al_sim, alpha_alr_sim, C_sim, betas)
     return param
 
-#%% degree corrected simulation functions for sinlge beta model
 
-def simulate_one_beta_dia_2_corrected(params_sim, a_nodes, end_time, theta_in_a, theta_out_a):
-    if len(params_sim) == 4:
-        mu_array, alpha_matrix, beta = OneBlockFit.get_array_param_n_r_dia(params_sim, len(a_nodes))
-    elif len(params_sim) == 6:
-        mu_array, alpha_matrix, beta = OneBlockFit.get_array_param_n_r_br_gr_dia(params_sim, len(a_nodes))
-    elif len(params_sim) == 8:
-        mu_array, alpha_matrix, beta = OneBlockFit.get_array_param_n_r_br_gr_al_alr_dia(params_sim, len(a_nodes))
-    # multibly mu with correction terms
-    theta_out_in_a = np.repeat(theta_out_a, len(a_nodes)) * np.tile(theta_in_a, len(a_nodes))
-    theta_corrected = np.delete(theta_out_in_a, np.arange(0, len(a_nodes) ** 2, len(a_nodes) + 1))
-    mu_corrected = mu_array * theta_corrected
-    # multivariate hawkes process object [NOTE: alpha=jump_size/beta, omega=beta]
-    P = MHP(mu=mu_corrected, alpha=alpha_matrix, omega=beta)
-    P.generate_seq(end_time)
-    # assume that timestamps list is ordered ascending with respect to u then v [(0,1), (0,2), .., (1,0), (1,2), ...]
-    events_list = []
-    for m in range(len(mu_array)):
-        i = np.nonzero(P.data[:, 1] == m)[0]
-        events_list.append(P.data[i, 0])
-    events_dict = OneBlockFit.events_list_to_events_dict_remove_empty_np(events_list, a_nodes)
-    return events_dict
-def simulate_one_beta_off_2_corrected(param_ab, param_ba, a_nodes, b_nodes, end_time, theta_in_a, theta_out_a, theta_in_b, theta_out_b):
-    if len(param_ab) == 4:
-        mu_array, alpha_matrix, beta = OneBlockFit.get_array_param_n_r_off(param_ab, param_ba, len(a_nodes), len(b_nodes))
-    elif len(param_ab) == 6:
-        mu_array, alpha_matrix, beta = OneBlockFit.get_array_param_n_r_br_gr_off(param_ab, param_ba, len(a_nodes), len(b_nodes))
-    if len(param_ab) == 8:
-        mu_array, alpha_matrix, beta = OneBlockFit.get_array_param_n_r_br_gr_al_alr_off(param_ab, param_ba, len(a_nodes), len(b_nodes))
-    # multibly mu with correction terms
-    theta_out_a_in_b = np.repeat(theta_out_a, len(b_nodes)) * np.tile(theta_in_b, len(a_nodes))
-    theta_out_b_in_a = np.repeat(theta_out_b, len(a_nodes)) * np.tile(theta_in_a, len(b_nodes))
-    theta_corrected = np.r_[theta_out_a_in_b, theta_out_b_in_a]
-    mu_corrected = mu_array * theta_corrected
-    # multivariate hawkes process object [NOTE: alpha=jump_size/beta, omega=beta]
-    P = MHP(mu=mu_corrected, alpha=alpha_matrix, omega=beta)
-    P.generate_seq(end_time)
-    # assume that timestamps list is ordered ascending with respect to u then v [(0,1), (0,2), .., (1,0), (1,2), ...]
-    events_list = []
-    for m in range(len(mu_array)):
-        i = np.nonzero(P.data[:, 1] == m)[0]
-        events_list.append(P.data[i, 0])
-    M = len(a_nodes) * len(b_nodes)
-    events_list_ab = events_list[:M]
-    events_list_ba = events_list[M:]
-    events_dict_ab = OneBlockFit.events_list_to_events_dict_remove_empty_np_off(events_list_ab, a_nodes, b_nodes)
-    events_dict_ba = OneBlockFit.events_list_to_events_dict_remove_empty_np_off(events_list_ba, b_nodes, a_nodes)
-    return events_dict_ab, events_dict_ba
-# full model simulation
-def simulate_one_beta_model_2_corrected(sim_param, n_nodes, n_classes, p, duration):
-    if len(sim_param) == 4:
-        mu_sim, alpha_n_sim, alpha_r_sim, beta_sim = sim_param
-    elif len(sim_param) == 6:
-        mu_sim, alpha_n_sim, alpha_r_sim, alpha_br_sim, alpha_gr_sim, beta_sim = sim_param
-    elif len(sim_param) == 8:
-        mu_sim, alpha_n_sim, alpha_r_sim, alpha_br_sim, alpha_gr_sim, alpha_al_sim, alpha_alr_sim, beta_sim = sim_param
-    # Generate theta_in & theta_out from pareto distribution
-    theta_in = pareto.rvs(1.5, size=n_nodes)
-    theta_out = pareto.rvs(1.5, size=n_nodes)
-    # normalize step
-    theta_in = theta_in * n_nodes / np.sum(theta_in)
-    theta_out = theta_out * n_nodes / np.sum(theta_out)
-    # list (n_classes) elements, each element is array of nodes that belong to same class
-    nodes_list = list(range(n_nodes))
-    random.shuffle(nodes_list)
-    p = np.round(np.cumsum(p) * n_nodes).astype(int)
-    class_nodes_list = np.array_split(nodes_list, p[:-1])
-    class_theta_in_list, class_theta_out_list = [], []
-    node_mem_actual = np.zeros((n_nodes,), dtype=int)
-    for c in range(n_classes):
-        node_mem_actual[class_nodes_list[c]] = c
-        # normalize degree paramters of each block
-        theta_in_block = theta_in[class_nodes_list[c]]
-        # theta_in_block_norm = theta_in_block * len(theta_in_block) / np.sum(theta_in_block)
-        class_theta_in_list.append(theta_in_block)
-        theta_out_block = theta_out[class_nodes_list[c]]
-        # theta_out_block_norm = theta_out_block * len(theta_out_block) / np.sum(theta_out_block)
-        class_theta_out_list.append(theta_out_block)
-    events_dict_all = {}
-    for i in range(n_classes):
-        for j in range(n_classes):
-            if i == j:
-                # blocks with only one node have 0 processes
-                if len(class_nodes_list[i]) > 1:
-                    if len(sim_param) == 4:
-                        par = (mu_sim[i, j], alpha_n_sim[i, j], alpha_r_sim[i, j], beta_sim)
-                    elif len(sim_param) == 6:
-                        par = (mu_sim[i, j], alpha_n_sim[i, j], alpha_r_sim[i, j], alpha_br_sim[i, j], alpha_gr_sim[i, j], beta_sim)
-                    elif len(sim_param) == 8:
-                        par = (mu_sim[i, j], alpha_n_sim[i, j], alpha_r_sim[i, j], alpha_br_sim[i, j], alpha_gr_sim[i, j],
-                               alpha_al_sim[i, j], alpha_alr_sim[i, j], beta_sim)
-                    events_dict = simulate_one_beta_dia_2_corrected(par, list(class_nodes_list[i]), duration, class_theta_in_list[i],
-                                                                    class_theta_out_list[i])
-                    events_dict_all.update(events_dict)
-            elif i < j:
-                if len(sim_param) == 4:
-                    par_ab = (mu_sim[i, j], alpha_n_sim[i, j], alpha_r_sim[i, j], beta_sim)
-                    par_ba = (mu_sim[j, i], alpha_n_sim[j, i], alpha_r_sim[j, i], beta_sim)
-                elif len(sim_param) == 6:
-                    par_ab = (mu_sim[i, j], alpha_n_sim[i, j], alpha_r_sim[i, j], alpha_br_sim[i, j], alpha_gr_sim[i, j], beta_sim)
-                    par_ba = (mu_sim[j, i], alpha_n_sim[j, i], alpha_r_sim[j, i], alpha_br_sim[j, i], alpha_gr_sim[j, i], beta_sim)
-                elif len(sim_param) == 8:
-                    par_ab = (mu_sim[i, j], alpha_n_sim[i, j], alpha_r_sim[i, j], alpha_br_sim[i, j], alpha_gr_sim[i, j],
-                              alpha_al_sim[i, j], alpha_alr_sim[i, j], beta_sim)
-                    par_ba = (mu_sim[j, i], alpha_n_sim[j, i], alpha_r_sim[j, i], alpha_br_sim[j, i], alpha_gr_sim[j, i],
-                              alpha_al_sim[j, i], alpha_alr_sim[j, i], beta_sim)
-                d_ab, d_ba = simulate_one_beta_off_2_corrected(par_ab, par_ba, list(class_nodes_list[i]), list(class_nodes_list[j]),
-                                                               duration, class_theta_in_list[i], class_theta_out_list[i],
-                                                               class_theta_in_list[j], class_theta_out_list[j])
-                events_dict_all.update(d_ab)
-                events_dict_all.update(d_ba)
-    return events_dict_all, node_mem_actual
 
 #%% Main
 
@@ -410,12 +298,12 @@ if __name__ == "__main__":
     # print(f"Simulation: sum of kerenels model at betas=", betas)
     # events_dict_all, node_mem_true = MBHP.simulate_sum_kernel_model(sim_param, N, K, p, T_all)
     #
-    # n_events_all = OneBlockFit.cal_num_events_2(events_dict_all)
+    # n_events_all = OneBlockFit.cal_num_events(events_dict_all)
     # print(f"at K={K}, N={N}, balanced membership, split ratio={split_ratio}")
     # print(f"T_all={T_all}, events_all={n_events_all}")
     # # split simulted events into train & all
     # events_dict_train, T_train = MBHP.split_train(events_dict_all, split_ratio=split_ratio)
-    # n_event_train = OneBlockFit.cal_num_events_2(events_dict_train)
+    # n_event_train = OneBlockFit.cal_num_events(events_dict_train)
     # print(f"T_train={T_train:.2f}, train_events={n_event_train}")
     #
     # # compute log-likelihood on true parameters
@@ -450,7 +338,7 @@ if __name__ == "__main__":
     #
     #     # simulate from parameter fit and compare two datasets motif counts
     #     events_dict_sim, node_mem_sim = MBHP.simulate_sum_kernel_model(fit_param, N, K, p, T_all)
-    #     n_events_sim = OneBlockFit.cal_num_events_2(events_dict_sim)
+    #     n_events_sim = OneBlockFit.cal_num_events(events_dict_sim)
     #     print(f"events_sim={n_events_sim}, events_all={n_events_all}")
     #     recip, trans, motif_count = MBHP.cal_recip_trans_motif(events_dict_all, N, 10)
     #     recip_sim, trans_sim, motif_count_sim = MBHP.cal_recip_trans_motif(events_dict_sim, N, 10)
@@ -475,7 +363,7 @@ if __name__ == "__main__":
     # betas = sim_param[n_alpha + 2]
     # print("Sum of kernels model at betas ", betas)
     # events_dict_all, node_mem_true = MBHP.simulate_sum_kernel_model(sim_param, N, K, percent, T_all)
-    # n_events_all = OneBlockFit.cal_num_events_2(events_dict_all)
+    # n_events_all = OneBlockFit.cal_num_events(events_dict_all)
     # print(f"Simultion at K={K}, N={N}, balanced membership, split ratio={split_ratio}")
     # print(f"T_all={T_all}, events_all={n_events_all}")
     # # print("\nTrue simulation parameters:")
@@ -502,8 +390,8 @@ if __name__ == "__main__":
     #             print("warning :(", events2)
     #         events_dict_2[(u, v)] = events2
     # print("split dataset into 2 equal parts and scaled second part")
-    # n_event_1 = OneBlockFit.cal_num_events_2(events_dict_1)
-    # n_event_2 = OneBlockFit.cal_num_events_2(events_dict_2)
+    # n_event_1 = OneBlockFit.cal_num_events(events_dict_1)
+    # n_event_2 = OneBlockFit.cal_num_events(events_dict_2)
     # print(f"n_events_1={n_event_1} , n_event_2={n_event_2}\n")
     #
     # # run SP on full dataset then calculate RI and LL
@@ -554,7 +442,7 @@ if __name__ == "__main__":
     # n_runs = 10
     # for run in range(n_runs):
     #     events_dict_all, node_mem_true = simulate_one_beta_model_2_corrected(sim_param, N, K, p, T_all)
-    #     n_events_all = OneBlockFit.cal_num_events_2(events_dict_all)
+    #     n_events_all = OneBlockFit.cal_num_events(events_dict_all)
     #     print(f"Sim: Duration={T_all}, Total Events={n_events_all}")
     #     agg_adj = event_dict_to_aggregated_adjacency(N, events_dict_all)
     #     MBHP.plot_adj(agg_adj, node_mem_true, K, "True membership")
@@ -577,13 +465,13 @@ if __name__ == "__main__":
     # betas = sim_param[-1]
     # print("Sum of kernels model at betas ", betas)
     # events_dict_all, node_mem_true = MBHP.simulate_sum_kernel_model(sim_param, N, K, percent, T_all)
-    # n_events_all = OneBlockFit.cal_num_events_2(events_dict_all)
+    # n_events_all = OneBlockFit.cal_num_events(events_dict_all)
     # print(f"Simultion at K={K}, N={N}, balanced membership, split ratio={split_ratio}")
     # print(f"T_all={T_all}, events_all={n_events_all}")
     #
     # # split into train and all
     # events_dict_train, T_train = MBHP.split_train(events_dict_all, split_ratio = split_ratio)
-    # n_event_train = OneBlockFit.cal_num_events_2(events_dict_train)
+    # n_event_train = OneBlockFit.cal_num_events(events_dict_train)
     # print(f"T_train={T_train:.2f}, train_events={n_event_train}")
     # ll_true_all, _ = MBHP.model_LL_kernel_sum_external(sim_param, events_dict_all, node_mem_true, K, T_all)
     # ll_true_train, _ = MBHP.model_LL_kernel_sum_external(sim_param, events_dict_train, node_mem_true, K, T_train)
@@ -627,7 +515,7 @@ if __name__ == "__main__":
                 n_events_avg = 0
                 for it in range(n_run):
                     events_dict, node_mem_true = MBHP.simulate_sum_kernel_model(sim_param, N, K, percent, T)
-                    n_events = OneBlockFit.cal_num_events_2(events_dict)
+                    n_events = OneBlockFit.cal_num_events(events_dict)
                     agg_adj = event_dict_to_aggregated_adjacency(N, events_dict)
                     if it == 0:
                         MBHP.plot_adj(agg_adj, node_mem_true, K, f"N={N}, T={T}")
@@ -694,7 +582,7 @@ if __name__ == "__main__":
                 MSE_C = np.zeros(n_run)
                 for it in range(n_run):
                     events_dict, node_mem_true = MBHP.simulate_sum_kernel_model(sim_param, N, K, percent, T)
-                    n_events = OneBlockFit.cal_num_events_2(events_dict)
+                    n_events = OneBlockFit.cal_num_events(events_dict)
                     agg_adj = event_dict_to_aggregated_adjacency(N, events_dict)
                     if it == 0:
                         MBHP.plot_adj(agg_adj, node_mem_true, K, f"N={N}, T={T}")
@@ -752,7 +640,7 @@ if __name__ == "__main__":
         MBHP.print_model_param_single_beta(sim_param)
         beta = sim_param[-1]
         events_dict, node_mem_true = MBHP.simulate_one_beta_model(sim_param, N, K, percent, T)
-        n_events = OneBlockFit.cal_num_events_2(events_dict)
+        n_events = OneBlockFit.cal_num_events(events_dict)
         agg_adj = event_dict_to_aggregated_adjacency(N, events_dict)
         MBHP.plot_adj(agg_adj, node_mem_true, K, f"N={N}, T={T}")
         print("\nfit method 1")

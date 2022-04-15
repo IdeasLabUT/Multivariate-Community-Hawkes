@@ -3,7 +3,7 @@ from tick.hawkes import SimuHawkesExpKernels, HawkesExpKern, HawkesADM4
 import sys
 sys.path.append("./CHIP-Network-Model")
 from dataset_utils import load_enron_train_test, load_reality_mining_test_train
-import OneBlockFit
+import utils_sum_betas_bp
 import pickle
 
 

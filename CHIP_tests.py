@@ -16,7 +16,7 @@ from bhm_generative_model import block_generative_model
 # from spectral_clustering import spectral_cluster
 import copy
 import time
-from OneBlockFit import cal_num_events_2
+from utils_sum_betas_bp import cal_num_events
 from Analyze_MID_test import load_data_train_all
 from MBHP_datasets_fit import load_facebook_chip
 import MultiBlockFit as MBHP
@@ -38,8 +38,8 @@ if dataset == "RealityMining" or dataset =="Enron-2":
         train_tuple, test_tuple, all_tuple, nodes_not_in_train = load_reality_mining_test_train(remove_nodes_not_in_train=False)
     events_dict_train, n_nodes_train, T_train = train_tuple
     events_dict_all, n_nodes_all, T_all = all_tuple
-    n_events_train = cal_num_events_2(events_dict_train)
-    n_events_all = cal_num_events_2(events_dict_all)
+    n_events_train = cal_num_events(events_dict_train)
+    n_events_all = cal_num_events(events_dict_all)
 elif dataset == "MID":
     f = './storage/datasets/MID/MID_std1hour.p'
     train_tup, all_tup, nodes_not_in_train = load_data_train_all(f, split_ratio=0.8, scale=1000, remove_small_comp=True)
@@ -117,8 +117,8 @@ elif dataset == "FacebookFiltered":
     dataset = "FacebookFiltered"
     # assuming the nodes of train are the same as all
     n_nodes_train = n_nodes_all
-    n_events_train = cal_num_events_2(events_dict_train)
-    n_events_all = cal_num_events_2(events_dict_all)
+    n_events_train = cal_num_events(events_dict_train)
+    n_events_all = cal_num_events(events_dict_all)
 
 
 for K in range(1, 11):
@@ -271,7 +271,7 @@ if SIM_FIT:
     #             # simulate using fitted parameters
     #             print("simulation ", run)
     #             _, events_dict_sim = block_generative_model(n_nodes_train, block_prob, bp_mu_t, bp_alpha_t, bp_beta_t, T_sim)
-    #             n_evens_sim = cal_num_events_2(events_dict_sim)
+    #             n_evens_sim = cal_num_events(events_dict_sim)
     #             # print(n_evens_sim)
     #             recip_sim, trans_sim, sim_motif_month = MBHP.cal_recip_trans_motif(events_dict_sim, n_nodes_train, motif_delta)
     #             sim_motif_avg_month += sim_motif_month
@@ -359,7 +359,7 @@ if SIM_FIT:
             # simulate using fitted parameters
             print("simulation ", run)
             _, events_dict_sim = community_generative_model(n_nodes_train, block_prob, bp_mu_t, bp_alpha_t, bp_beta_t, T_sim)
-            n_evens_sim = cal_num_events_2(events_dict_sim)
+            n_evens_sim = cal_num_events(events_dict_sim)
             # print(n_evens_sim)
             recip_sim, trans_sim, sim_motif_month = MBHP.cal_recip_trans_motif(events_dict_sim, n_nodes_train, motif_delta)
             sim_motif_avg_month += sim_motif_month

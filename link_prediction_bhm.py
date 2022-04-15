@@ -40,7 +40,7 @@ def mulch_predict_probs_and_actual(n_nodes, t0, delta, bp_events_dict, params_tu
 
 def bhm_predict_probs_and_actual(t0, delta, n_nodes, events_dict_all, params_tup, K, node_mem_train):
     # event_dictionaries for block pairs
-    bp_events_dict_all = MBHP.events_dict_to_blocks(events_dict_all, node_mem_train, K)
+    bp_events_dict_all = MBHP.events_dict_to_events_dict_bp(events_dict_all, node_mem_train, K)
     # number of node pairs per block pair & number of nodes in one block
     bp_M, n_nodes_b = MBHP.num_nodes_pairs_per_block_pair(node_mem_train, K)
     bp_mu, bp_alpha, bp_beta = params_tup
@@ -277,7 +277,7 @@ if __name__ == "__main__":
     # refinement fit parameters
     fit_params_tup = results_dict["fit_param_ref"]
     nodes_mem_all = results_dict["node_mem_all_ref"] # should I only use train node membership??
-    block_pairs_all = MBHP.events_dict_to_blocks(events_dict_all, nodes_mem_all, K)
+    block_pairs_all = MBHP.events_dict_to_events_dict_bp(events_dict_all, nodes_mem_all, K)
     runs = 100
     t0s = np.loadtxt(f"{save_path}/t0/{dataset}_t0.csv", delimiter=',', usecols=1)
     auc = np.zeros(runs)
@@ -309,7 +309,7 @@ if __name__ == "__main__":
     # # refinement fit parameters
     # fit_params_tup = results_dict["fit_param_ref"]
     # nodes_mem_all = results_dict["node_mem_all_ref"]
-    # block_pairs_all = MBHP.events_dict_to_blocks(events_dict_all, nodes_mem_all, K)
+    # block_pairs_all = MBHP.events_dict_to_events_dict_bp(events_dict_all, nodes_mem_all, K)
     # runs = 3
     # auc = np.zeros(runs)
     # for i in range(runs):

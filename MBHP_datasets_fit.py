@@ -5,14 +5,11 @@ import time
 import random
 import pickle
 from sklearn.metrics import adjusted_rand_score
-import OneBlockFit
+import utils_sum_betas_bp as sum_betas_bp
 import MultiBlockFit as MBHP
-from refinement_alg import model_fit_refine_kernel_sum_exact, model_fit_refine_kernel_sum_relative
+from refinement_alg import model_fit_refine_kernel_sum_exact
 
 import sys
-sys.path.append("./dynetworkx/classes")
-from impulsedigraph import ImpulseDiGraph
-
 sys.path.append("./CHIP-Network-Model")
 from dataset_utils import load_enron_train_test, load_reality_mining_test_train, get_node_map, load_facebook_wall
 from generative_model_utils import event_dict_to_aggregated_adjacency, event_dict_to_adjacency
@@ -192,7 +189,7 @@ if __name__ == "__main__":
             # start_fit_time = time.time()
             # params_est, ll_t, n_events_t = MBHP.fit_2_alpha_rho_single_beta(events_dict_train, node_mem_train, n_classes, end_time_train, beta)
             # M_bp, n_nodes_c = MBHP.num_nodes_pairs_per_block_pair(node_mem_all, n_classes)
-            # events_dict_bp_all = MBHP.events_dict_to_blocks(events_dict_all, node_mem_all, n_classes)
+            # events_dict_bp_all = MBHP.events_dict_to_events_dict_bp(events_dict_all, node_mem_all, n_classes)
             # ll_all, n_events_all = MBHP.model_LL_2_alpha_rho_single_beta(params_est, events_dict_bp_all, end_time_all,
             #                                                              M_bp, n_nodes_c, n_classes)
             # end_fit_time = time.time()
@@ -309,7 +306,7 @@ if __name__ == "__main__":
 
 
                 recip_sim, trans_sim, sim_motif_run = MBHP.cal_recip_trans_motif(events_dict_sim, n_nodes_train, motif_delta)
-                n_evens_sim = OneBlockFit.cal_num_events_2(events_dict_sim)
+                n_evens_sim = sum_betas_bp.cal_num_events(events_dict_sim)
                 print(f"n_events={n_evens_sim}, recip={recip_sim:.4f}, trans={trans_sim:.4f}")
 
                 sim_motif_avg += sim_motif_run
@@ -385,13 +382,13 @@ if __name__ == "__main__":
             start_fit_time = time.time()
             # sp_tup, ref_tup, message, ref_time = model_fit_refine_kernel_sum_relative(1, n_alpha, events_dict_train, n_nodes_train, K,
             #                                                                 end_time_train, betas, batch=ref_batch)
-            sp_tup, ref_tup, message = model_fit_refine_kernel_sum_exact(MAX_ITER, n_alpha, events_dict_train, n_nodes_train,
-                                                                                      K, end_time_train, betas, batch=ref_batch)
+            sp_tup, ref_tup, message = model_fit_refine_kernel_sum_exact(events_dict_train, n_nodes_train,
+                                                                         end_time_train, K, betas, n_alpha, MAX_ITER)
             end_fit_time = time.time()
             time_to_fit = end_fit_time - start_fit_time
 
             # spectral clustering fit results
-            nodes_mem_train_sp, fit_param_sp, ll_train_sp, n_events_train = sp_tup
+            nodes_mem_train_sp, fit_param_sp, ll_train_sp, n_events_train, fit_time_sp = sp_tup
             node_mem_all_sp = MBHP.assign_node_membership_for_missing_nodes(nodes_mem_train_sp, nodes_not_in_train)
             ll_all_sp, n_events_all = MBHP.model_LL_kernel_sum_external(fit_param_sp, events_dict_all, node_mem_all_sp, K, end_time_all)
             ll_all_event_sp = ll_all_sp / n_events_all
@@ -402,7 +399,7 @@ if __name__ == "__main__":
             # analyze_block(nodes_mem_train_sp, K, id_node_map_train)
 
             # refinement fit results
-            nodes_mem_train_ref, fit_param_ref, ll_train_ref, num_events = ref_tup
+            nodes_mem_train_ref, fit_param_ref, ll_train_ref, num_events, fit_time_ref = ref_tup
             nodes_mem_all_ref = MBHP.assign_node_membership_for_missing_nodes(nodes_mem_train_ref, nodes_not_in_train)
             ll_all_ref, n_events_all = MBHP.model_LL_kernel_sum_external(fit_param_ref, events_dict_all, nodes_mem_all_ref, K, end_time_all)
             ll_all_event_ref = ll_all_ref / n_events_all
@@ -427,9 +424,9 @@ if __name__ == "__main__":
             results_dict["ll_all_sp"] = ll_all_event_sp
             results_dict["ll_test_sp"] = ll_test_event_sp
             results_dict["message"] = message
-            # results_dict["ref_time"] = ref_time
             results_dict["n_classes"] = K
-            results_dict["fit_time(s)"] = time_to_fit
+            results_dict["fit_time_sp(s)"] = fit_time_sp
+            results_dict["fit_time_ref(s)"] = fit_time_ref
             results_dict["train_end_time"] = end_time_train
             results_dict["all_end_time"] = end_time_all
             # open file in write+binary mode
@@ -470,7 +467,7 @@ if __name__ == "__main__":
         # ######## run motif counts on dataset
         # dataset_recip, dataset_trans, dataset_motif_week = MBHP.cal_recip_trans_motif(events_dict_train, n_nodes_train, motif_delta,
         #                                                          f"week_{dataset}_noise", save=True)
-        # dataset_n_events_train = OneBlockFit.cal_num_events_2(events_dict_train)
+        # dataset_n_events_train = OneBlockFit.cal_num_events(events_dict_train)
         # ####### read networks recip, trans, motifs count from saved pickle
         with open(f"Datasets_motif_counts/week_{dataset}_counts.p", 'rb') as f:
             Mcounts = pickle.load(f)
@@ -506,7 +503,7 @@ if __name__ == "__main__":
                     # simulate using fitted parameters
                     print("simulation ", run)
                     events_dict_sim, _ = MBHP.simulate_sum_kernel_model(fit_param_ref, n_nodes_train, K, block_prob_ref, T_sim)
-                    n_evens_sim = OneBlockFit.cal_num_events_2(events_dict_sim)
+                    n_evens_sim = sum_betas_bp.cal_num_events(events_dict_sim)
                     recip_sim, trans_sim, sim_motif_week = MBHP.cal_recip_trans_motif(events_dict_sim, n_nodes_train, motif_delta)
                     sim_motif_all_week[run,:,:] = sim_motif_week
                     sim_motif_avg_week += sim_motif_week
@@ -603,7 +600,7 @@ if __name__ == "__main__":
                     # simulate using fitted parameters
                     print("simulation ", run)
                     events_dict_sim, _ = MBHP.simulate_sum_kernel_model(fit_param, n_nodes_train, K, block_prob_ref, T_sim)
-                    n_evens_sim = OneBlockFit.cal_num_events_2(events_dict_sim)
+                    n_evens_sim = sum_betas_bp.cal_num_events(events_dict_sim)
                     recip_sim, trans_sim, sim_motif_week = MBHP.cal_recip_trans_motif(events_dict_sim, n_nodes_train, motif_delta)
                     sim_motif_all_week[run,:,:] = sim_motif_week
                     sim_motif_avg_week += sim_motif_week

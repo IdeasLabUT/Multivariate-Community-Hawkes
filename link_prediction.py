@@ -27,7 +27,7 @@ def mulch_predict_probs_and_actual(n_nodes, t0, delta, events_dict, params_tup, 
         # index of timestamps < t0
         index = bisect_left(t_uv, t0)
         events_dict_less_t0[(u, v)] = t0 - t_uv[:index]
-    bp_events_dict_less_t0 = MBHP.events_dict_to_blocks(events_dict_less_t0, nodes_mem_all, K)
+    bp_events_dict_less_t0 = MBHP.events_dict_to_events_dict_bp(events_dict_less_t0, nodes_mem_all, K)
     prob_dict = np.zeros((n_nodes, n_nodes))  # Predicted probs that link exists
     y = np.zeros((n_nodes, n_nodes))  # actual link
     for u in range(n_nodes):

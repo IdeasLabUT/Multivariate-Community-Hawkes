@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 
 from spectral_clustering import spectral_cluster1
-from OneBlockFit import cal_num_events_2
+from utils_sum_betas_bp import cal_num_events
 from refinement_alg import model_fit_refine_kernel_sum_exact
 import MultiBlockFit as MBHP
 from Read_results import analyze_block
@@ -333,7 +333,7 @@ if __name__ == "__main__":
                 # simulate using fitted parameters
                 print("simulation ", run)
                 events_dict_sim, _ = MBHP.simulate_sum_kernel_model(params_est, n_nodes_all, K_sim, block_prob, T_sim)
-                n_evens_sim = cal_num_events_2(events_dict_sim)
+                n_evens_sim = cal_num_events(events_dict_sim)
                 recip_sim, trans_sim, sim_motif_run = MBHP.cal_recip_trans_motif(events_dict_sim, n_nodes_all, motif_delta)
                 print(f"n_events={n_evens_sim}, recip={recip_sim:.4f}, trans={trans_sim:.4f}")
                 sim_motif_avg += sim_motif_run
@@ -383,14 +383,12 @@ if __name__ == "__main__":
         MAX_ITER = 0
         print("fit refine at K=", K)
         # run one iteration of refinement algorithm
-        start_fit_time = time.time()
-        sp_tup, ref_tup, message = model_fit_refine_kernel_sum_exact(MAX_ITER, n_alpha, events_dict_train, n_nodes_train,
-                                                      K, T_train, betas, batch=ref_batch)
-        end_fit_time = time.time()
-        time_to_fit = end_fit_time - start_fit_time
+
+        sp_tup, ref_tup, message = model_fit_refine_kernel_sum_exact(events_dict_train, n_nodes_train, T_train, K,
+                                                                     betas, n_alpha, MAX_ITER)
 
         # spectral clustering fit results
-        nodes_mem_train_sp, fit_param_sp, ll_train_sp, n_events_train = sp_tup
+        nodes_mem_train_sp, fit_param_sp, ll_train_sp, n_events_train, fit_time_sp = sp_tup
         node_mem_all_sp = MBHP.assign_node_membership_for_missing_nodes(nodes_mem_train_sp, nodes_not_in_train)
         ll_all_sp, n_events_all = MBHP.model_LL_kernel_sum_external(fit_param_sp, events_dict_all, node_mem_all_sp, K, T_all)
         ll_all_event_sp = ll_all_sp / n_events_all
@@ -400,7 +398,7 @@ if __name__ == "__main__":
         # analyze_block(nodes_mem_train_sp, K, id_node_map_train)
 
         # refinement fit results
-        nodes_mem_train_ref, fit_param_ref, ll_train_ref, num_events = ref_tup
+        nodes_mem_train_ref, fit_param_ref, ll_train_ref, num_events, fit_time_ref = ref_tup
         nodes_mem_all_ref = MBHP.assign_node_membership_for_missing_nodes(nodes_mem_train_ref, nodes_not_in_train)
         ll_all_ref, n_events_all = MBHP.model_LL_kernel_sum_external(fit_param_ref, events_dict_all, nodes_mem_all_ref, K, T_all)
         ll_all_event_ref = ll_all_ref / n_events_all
@@ -428,7 +426,8 @@ if __name__ == "__main__":
         results_dict["n_classes"] = K
         results_dict["id_node_map_train"] = id_node_map_train
         results_dict["id_node_map_all"] = id_node_map_all
-        results_dict["fit_time(s)"] = time_to_fit
+        results_dict["fit_time_sp(s)"] = fit_time_sp
+        results_dict["fit_time_ref(s)"] = fit_time_ref
         results_dict["train_end_time"] = T_train
         results_dict["all_end_time"] = T_all
         results_dict["timestamp_scale"] = timestamp_scale
@@ -457,7 +456,7 @@ if __name__ == "__main__":
         # ##### run motif counts on dataset
         # dataset_recip, dataset_trans, dataset_motif_month = MBHP.cal_recip_trans_motif(events_dict_train, n_nodes_train, motif_delta_month,
         #                                                                               f"month_{dataset}", save=True)
-        # dataset_n_events_train = cal_num_events_2(events_dict_train)
+        # dataset_n_events_train = cal_num_events(events_dict_train)
 
         # ##### read networks recip, trans, motifs count from saved pickle
         with open(f"Datasets_motif_counts/month_MID_counts.p", 'rb') as f:
@@ -501,7 +500,7 @@ if __name__ == "__main__":
                     # simulate using fitted parameters
                     print("simulation ", run)
                     events_dict_sim, _ = MBHP.simulate_sum_kernel_model(fit_param_ref, n_nodes_train, K, block_prob_ref, T_sim)
-                    n_evens_sim = cal_num_events_2(events_dict_sim)
+                    n_evens_sim = cal_num_events(events_dict_sim)
                     recip_sim, trans_sim, sim_motif_month = MBHP.cal_recip_trans_motif(events_dict_sim, n_nodes_train, motif_delta_month)
                     sim_motif_avg_month += sim_motif_month
                     sim_motif_all_month[run, :, :] = sim_motif_month

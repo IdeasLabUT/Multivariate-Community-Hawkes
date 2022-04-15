@@ -1,18 +1,15 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import networkx as nx
-import time
 import random
 import pickle
-from sklearn.metrics import adjusted_rand_score
-import OneBlockFit
-import sys
-sys.path.append("./dynetworkx/classes")
-from impulsedigraph import ImpulseDiGraph
-sys.path.append("./CHIP-Network-Model")
-from spectral_clustering import spectral_cluster1
+import utils_sum_betas_bp as sum_betas_bp
+import utils_one_beta_bp as one_beta_bp
+import utils_generate_bp as generate_bp
+from dynetworkx.classes.impulsedigraph import ImpulseDiGraph
 
-#%% helper function
+
+#%% model fitting helper function
 
 def plot_adj(agg_adj, node_mem, K, s=""):
     nodes_per_class, n_class = [], []
@@ -116,9 +113,9 @@ def assign_node_membership_for_missing_nodes(node_membership, missing_nodes):
 
     return combined_node_membership
 
-def events_dict_to_blocks(events_dict, node_mem, n_classes):
+def events_dict_to_events_dict_bp(events_dict, node_mem, n_classes):
     # each block_pair is a dict of events
-    block_pair_events_dict = np.zeros((n_classes, n_classes), dtype=np.int).tolist()
+    block_pair_events_dict = [[None]*n_classes for _ in range(n_classes)]
     for i in range(n_classes):
         for j in range(n_classes):
             block_pair_events_dict[i][j] = {}
@@ -192,7 +189,7 @@ def simulate_one_beta_model(sim_param, n_nodes, n_classes, p, duration):
                     elif len(sim_param) == 8:
                         par = (mu_sim[i, j], alpha_n_sim[i, j], alpha_r_sim[i, j], alpha_br_sim[i, j], alpha_gr_sim[i, j],
                                alpha_al_sim[i, j], alpha_alr_sim[i, j], beta_sim)
-                    events_dict = OneBlockFit.simulate_one_beta_dia_2(par, list(class_nodes_list[i]), duration)
+                    events_dict = generate_bp.simulate_one_beta_dia_2(par, list(class_nodes_list[i]), duration)
                     events_dict_all.update(events_dict)
             elif i < j:
                 if len(sim_param) == 4:
@@ -206,7 +203,7 @@ def simulate_one_beta_model(sim_param, n_nodes, n_classes, p, duration):
                               alpha_al_sim[i, j], alpha_alr_sim[i, j], beta_sim)
                     par_ba = (mu_sim[j, i], alpha_n_sim[j, i], alpha_r_sim[j, i], alpha_br_sim[j, i], alpha_gr_sim[j, i],
                               alpha_al_sim[j, i], alpha_alr_sim[j, i], beta_sim)
-                d_ab, d_ba = OneBlockFit.simulate_one_beta_off_2(par_ab, par_ba, list(class_nodes_list[i]), list(class_nodes_list[j]),
+                d_ab, d_ba = generate_bp.simulate_one_beta_off_2(par_ab, par_ba, list(class_nodes_list[i]), list(class_nodes_list[j]),
                                                                      duration)
                 events_dict_all.update(d_ab)
                 events_dict_all.update(d_ba)
@@ -241,7 +238,7 @@ def simulate_sum_kernel_model(sim_param, n_nodes, n_classes, p, duration):
                     elif len(sim_param) == 9:
                         par = (mu_sim[i, j], alpha_n_sim[i, j], alpha_r_sim[i, j], alpha_br_sim[i, j], alpha_gr_sim[i, j],
                            alpha_al_sim[i, j], alpha_alr_sim[i, j], np.array(C_sim[i, j]), betas_sim)
-                    events_dict = OneBlockFit.simulate_kernel_sum_dia_2(par, list(class_nodes_list[i]), duration)
+                    events_dict = generate_bp.simulate_sum_betas_dia_bp(par, list(class_nodes_list[i]), duration)
                     events_dict_all.update(events_dict)
             elif i < j:
                 if len(sim_param) == 5:
@@ -257,7 +254,7 @@ def simulate_sum_kernel_model(sim_param, n_nodes, n_classes, p, duration):
                               alpha_al_sim[i, j], alpha_alr_sim[i, j], np.array(C_sim[i, j]), betas_sim)
                     par_ba = (mu_sim[j, i], alpha_n_sim[j, i], alpha_r_sim[j, i], alpha_br_sim[j, i], alpha_gr_sim[j, i],
                               alpha_al_sim[j, i], alpha_alr_sim[j, i], np.array(C_sim[j, i]) ,betas_sim)
-                d_ab, d_ba = OneBlockFit.simulate_kernel_sum_off_2(par_ab, par_ba, list(class_nodes_list[i]), list(class_nodes_list[j]),
+                d_ab, d_ba = generate_bp.simulate_sum_betas_off_bp(par_ab, par_ba, list(class_nodes_list[i]), list(class_nodes_list[j]),
                                                                  duration)
                 events_dict_all.update(d_ab)
                 events_dict_all.update(d_ba)
@@ -275,14 +272,14 @@ def model_LL_6_alpha_single_beta(params_tup, events_dict_bp, end_time, M_bp, n_n
             par = (mu_bp[i, j], alpha_n_bp[i, j], alpha_r_bp[i, j], alpha_br_bp[i, j], alpha_gr_bp[i, j],
                   alpha_al_bp[i, j], alpha_alr_bp[i, j], beta)
             if i == j: # diagonal block pair
-                ll_dia = OneBlockFit.LL_n_r_br_gr_al_alr_one_dia(par, events_dict_bp[i][j], end_time, n_nodes_c[j,0], M_bp[i,j])
+                ll_dia = one_beta_bp.LL_6_alpha_one_beta_dia(par, events_dict_bp[i][j], end_time, n_nodes_c[j,0], M_bp[i,j])
                 ll_full += ll_dia
             else: # off-diagonal block pair
-                ll_off = OneBlockFit.LL_n_r_br_gr_al_alr_one_off(par, (events_dict_bp[i][j]), (events_dict_bp[j][i]),
+                ll_off = one_beta_bp.LL_6_alpha_one_beta_off(par, (events_dict_bp[i][j]), (events_dict_bp[j][i]),
                                                                       end_time, n_nodes_c[j,0],  M_bp[i,j])
                 ll_full += ll_off
             # number of event of block_pair
-            num_events += OneBlockFit.cal_num_events_2(events_dict_bp[i][j])
+            num_events += one_beta_bp.cal_num_events(events_dict_bp[i][j])
     return ll_full, num_events
 def model_LL_4_alpha_single_beta(params_tup, events_dict_bp, end_time, M_bp, n_nodes_c, n_classes):
     mu_bp, alpha_n_bp, alpha_r_bp, alpha_br_bp, alpha_gr_bp, beta = params_tup
@@ -292,14 +289,14 @@ def model_LL_4_alpha_single_beta(params_tup, events_dict_bp, end_time, M_bp, n_n
         for j in range(n_classes):
             par = (mu_bp[i, j], alpha_n_bp[i, j], alpha_r_bp[i, j], alpha_br_bp[i, j], alpha_gr_bp[i, j], beta)
             if i == j: # diagonal block pair
-                ll_dia = OneBlockFit.LL_n_r_br_gr_one_dia_2(par, events_dict_bp[i][j], end_time, n_nodes_c[j,0], M_bp[i,j])
+                ll_dia = one_beta_bp.LL_4_alpha_one_beta_dia(par, events_dict_bp[i][j], end_time, n_nodes_c[j,0], M_bp[i,j])
                 ll_full += ll_dia
             else: # off-diagonal block pair
-                ll_off = OneBlockFit.LL_n_r_br_gr_one_off_2(par, (events_dict_bp[i][j]), (events_dict_bp[j][i]),
+                ll_off = one_beta_bp.LL_4_alpha_one_beta_off(par, (events_dict_bp[i][j]), (events_dict_bp[j][i]),
                                                                       end_time, n_nodes_c[j,0],  M_bp[i,j])
                 ll_full += ll_off
             # number of event of block_pair
-            num_events += OneBlockFit.cal_num_events_2(events_dict_bp[i][j])
+            num_events += one_beta_bp.cal_num_events(events_dict_bp[i][j])
     return ll_full, num_events
 def model_LL_2_alpha_single_beta(params_tup, events_dict_bp, end_time, M_bp, n_nodes_c, n_classes):
     mu_bp, alpha_n_bp, alpha_r_bp, beta = params_tup
@@ -309,14 +306,15 @@ def model_LL_2_alpha_single_beta(params_tup, events_dict_bp, end_time, M_bp, n_n
         for j in range(n_classes):
             if i == j: # diagonal block pair
                 par = (mu_bp[i,j], alpha_n_bp[i,j], alpha_r_bp[i,j], beta)
-                ll_full += OneBlockFit.LL_n_r_one_dia_2(par, events_dict_bp[i][j], end_time, n_nodes_c[j,0], M_bp[i,j])
+                ll_full += one_beta_bp.LL_2_alpha_one_beta_dia(par, events_dict_bp[i][j], end_time, n_nodes_c[j,0], M_bp[i,j])
             else: # off-diagonal block pair
                 par = (mu_bp[i,j], alpha_n_bp[i,j], alpha_r_bp[i,j], beta)
-                ll_full += OneBlockFit.LL_n_r_one_off_2(par, (events_dict_bp[i][j]), (events_dict_bp[j][i]),
+                ll_full += one_beta_bp.LL_2_alpha_one_beta_off(par, (events_dict_bp[i][j]), (events_dict_bp[j][i]),
                                                                       end_time, n_nodes_c[j,0],  M_bp[i,j])
             # number of event of block_pair
-            num_events += OneBlockFit.cal_num_events_2(events_dict_bp[i][j])
+            num_events += one_beta_bp.cal_num_events(events_dict_bp[i][j])
     return ll_full, num_events
+
 def model_LL_2_alpha_rho_single_beta(params_tup, events_dict_bp, end_time, M_bp, n_nodes_c, n_classes):
     mu_bp, alpha_bp, rho_bp, beta = params_tup
     ll_full = 0
@@ -325,19 +323,19 @@ def model_LL_2_alpha_rho_single_beta(params_tup, events_dict_bp, end_time, M_bp,
         for j in range(n_classes):
             if i == j: # diagonal block pair
                 par = (mu_bp[i,j], alpha_bp[i,j], alpha_bp[i,j]*rho_bp[i, j], beta)
-                ll_full += OneBlockFit.LL_n_r_one_dia_2(par, events_dict_bp[i][j], end_time, n_nodes_c[j,0], M_bp[i,j])
-                num_events += OneBlockFit.cal_num_events_2(events_dict_bp[i][j])
+                ll_full += one_beta_bp.LL_2_alpha_one_beta_dia(par, events_dict_bp[i][j], end_time, n_nodes_c[j,0], M_bp[i,j])
+                num_events += one_beta_bp.cal_num_events(events_dict_bp[i][j])
             elif j > i: # off-diagonal block pair & (j > i)
                 par = (mu_bp[i,j], mu_bp[j, i], alpha_bp[i,j], alpha_bp[j,i], rho_bp[i, j], beta)
-                ll_full += OneBlockFit.LL_n_r_one_off_rho(par, (events_dict_bp[i][j]), (events_dict_bp[j][i]),
+                ll_full += one_beta_bp.LL_2_alpha_one_beta_off_rho(par, (events_dict_bp[i][j]), (events_dict_bp[j][i]),
                                                                       end_time, n_nodes_c[i,0],  n_nodes_c[j,0])
-                num_events += OneBlockFit.cal_num_events_2(events_dict_bp[i][j])
-                num_events += OneBlockFit.cal_num_events_2(events_dict_bp[j][i])
+                num_events += one_beta_bp.cal_num_events(events_dict_bp[i][j])
+                num_events += one_beta_bp.cal_num_events(events_dict_bp[j][i])
     return ll_full, num_events
 # used to calculate log-likelihood - external call
 def model_LL_single_beta_external(param, events_dict, node_mem, k, end_time):
     block_pair_M, n_nodes_c = num_nodes_pairs_per_block_pair(node_mem, k)
-    events_dict_block_pair = events_dict_to_blocks(events_dict, node_mem, k)
+    events_dict_block_pair = events_dict_to_events_dict_bp(events_dict, node_mem, k)
     if len(param)==4:
         ll, n_event = model_LL_2_alpha_single_beta(param, events_dict_block_pair, end_time, block_pair_M, n_nodes_c, k)
     elif len(param)==6:
@@ -355,14 +353,14 @@ def model_LL_2_alpha_kernel_sum(params_tup, events_dict_bp, end_time, M_bp, n_no
         for j in range(n_classes):
             par = (mu_bp[i, j], alpha_n_bp[i, j], alpha_r_bp[i, j], C_bp[i, j, :], betas)
             if i == j:  # diagonal block pair
-                ll_dia = OneBlockFit.LL_2_alpha_kernel_sum_dia(par, events_dict_bp[i][j], end_time, n_nodes_c[j, 0], M_bp[i, j])
+                ll_dia = sum_betas_bp.LL_2_alpha_kernel_sum_dia(par, events_dict_bp[i][j], end_time, n_nodes_c[j, 0], M_bp[i, j])
                 LL_bp[i, j] = ll_dia
             else:  # off-diagonal block pair
-                ll_off = OneBlockFit.LL_2_alpha_kernel_sum_off(par, events_dict_bp[i][j], events_dict_bp[j][i], end_time,
+                ll_off = sum_betas_bp.LL_2_alpha_kernel_sum_off(par, events_dict_bp[i][j], events_dict_bp[j][i], end_time,
                                                                n_nodes_c[j, 0], M_bp[i, j])
                 LL_bp[i, j] = ll_off
             # number of event of block_pair
-            num_events += OneBlockFit.cal_num_events_2(events_dict_bp[i][j])
+            num_events += sum_betas_bp.cal_num_events(events_dict_bp[i][j])
     if ref:
         return LL_bp, num_events
     else:
@@ -376,14 +374,14 @@ def model_LL_4_alpha_kernel_sum(params_tup, events_dict_bp, end_time, M_bp, n_no
             par = (mu_bp[i, j], alpha_n_bp[i, j], alpha_r_bp[i, j], alpha_br_bp[i, j], alpha_gr_bp[i, j],
                    C_bp[i, j],betas)
             if i == j:  # diagonal block pair
-                ll_dia = OneBlockFit.LL_4_alpha_kernel_sum_dia(par, events_dict_bp[i][j], end_time, n_nodes_c[j, 0], M_bp[i, j])
+                ll_dia = sum_betas_bp.LL_4_alpha_kernel_sum_dia(par, events_dict_bp[i][j], end_time, n_nodes_c[j, 0], M_bp[i, j])
                 LL_bp[i, j] = ll_dia
             else:  # off-diagonal block pair
-                ll_off = OneBlockFit.LL_4_alpha_kernel_sum_off(par, events_dict_bp[i][j], events_dict_bp[j][i], end_time,
+                ll_off = sum_betas_bp.LL_4_alpha_kernel_sum_off(par, events_dict_bp[i][j], events_dict_bp[j][i], end_time,
                                                                n_nodes_c[j, 0], M_bp[i, j])
                 LL_bp[i, j] = ll_off
             # number of event of block_pair
-            num_events += OneBlockFit.cal_num_events_2(events_dict_bp[i][j])
+            num_events += sum_betas_bp.cal_num_events(events_dict_bp[i][j])
     if ref:
         return LL_bp, num_events
     else:
@@ -397,14 +395,14 @@ def model_LL_6_alpha_kernel_sum(params_tup, events_dict_bp, end_time, M_bp, n_no
             par = (mu_bp[i, j], alpha_n_bp[i, j], alpha_r_bp[i, j], alpha_br_bp[i, j], alpha_gr_bp[i, j],
                    alpha_al_bp[i, j], alpha_alr_bp[i, j], C_bp[i, j], betas)
             if i == j:  # diagonal block pair
-                ll_dia = OneBlockFit.LL_6_alpha_kernel_sum_dia(par, events_dict_bp[i][j], end_time, n_nodes_c[j, 0], M_bp[i, j])
+                ll_dia = sum_betas_bp.LL_6_alpha_kernel_sum_dia(par, events_dict_bp[i][j], end_time, n_nodes_c[j, 0], M_bp[i, j])
                 LL_bp[i, j] = ll_dia
             else:  # off-diagonal block pair
-                ll_off = OneBlockFit.LL_6_alpha_kernel_sum_off(par, events_dict_bp[i][j], events_dict_bp[j][i], end_time,
+                ll_off = sum_betas_bp.LL_6_alpha_kernel_sum_off(par, events_dict_bp[i][j], events_dict_bp[j][i], end_time,
                                                                n_nodes_c[j, 0], M_bp[i, j])
                 LL_bp[i, j] = ll_off
             # number of event of block_pair
-            num_events += OneBlockFit.cal_num_events_2(events_dict_bp[i][j])
+            num_events += sum_betas_bp.cal_num_events(events_dict_bp[i][j])
     if ref:
         return LL_bp, num_events
     else:
@@ -412,7 +410,7 @@ def model_LL_6_alpha_kernel_sum(params_tup, events_dict_bp, end_time, M_bp, n_no
 # used to calculate log-likelihood - external call
 def model_LL_kernel_sum_external(param, events_dict, node_mem, k, end_time, ref=False):
     block_pair_M, n_nodes_c = num_nodes_pairs_per_block_pair(node_mem, k)
-    events_dict_block_pair = events_dict_to_blocks(events_dict, node_mem, k)
+    events_dict_block_pair = events_dict_to_events_dict_bp(events_dict, node_mem, k)
     if len(param) == 5:
         return model_LL_2_alpha_kernel_sum(param, events_dict_block_pair, end_time, block_pair_M, n_nodes_c, k, ref)
     elif len(param) == 7:
@@ -426,7 +424,7 @@ def model_LL_kernel_sum_external(param, events_dict, node_mem, k, end_time, ref=
 def fit_2_alpha_single_beta(events_dict, node_mem, n_classes, end_time, beta):
     # return number of node pairs within a block pair, number of nodes per class
     bp_M_train, n_nodes_c = num_nodes_pairs_per_block_pair(node_mem, n_classes)
-    bps_train = events_dict_to_blocks(events_dict, node_mem, n_classes)
+    bps_train = events_dict_to_events_dict_bp(events_dict, node_mem, n_classes)
     # initialize paramters matrices
     mu_bp = np.zeros((n_classes, n_classes))
     alpha_n_bp = np.zeros((n_classes, n_classes))
@@ -434,10 +432,10 @@ def fit_2_alpha_single_beta(events_dict, node_mem, n_classes, end_time, beta):
     for i in range(n_classes):
         for j in range(n_classes):
             if i == j:  # diagonal block pair
-                params_est = OneBlockFit.fit_n_r_one_dia_2(bps_train[i][j], end_time, n_nodes_c[j,0], bp_M_train[i, j], beta)
+                params_est = one_beta_bp.fit_2_alpha_one_beta_dia(bps_train[i][j], end_time, n_nodes_c[j,0], bp_M_train[i, j], beta)
 
             else:   # off-diagonal block pair
-                params_est = OneBlockFit.fit_n_r_one_off_2(bps_train[i][j], bps_train[j][i], end_time,
+                params_est = one_beta_bp.fit_2_alpha_one_beta_off(bps_train[i][j], bps_train[j][i], end_time,
                                                            n_nodes_c[j,0], bp_M_train[i, j],beta)
             mu_bp[i, j] = params_est[0]
             alpha_n_bp[i, j] = params_est[1]
@@ -449,7 +447,7 @@ def fit_2_alpha_single_beta(events_dict, node_mem, n_classes, end_time, beta):
 def fit_4_alpha_single_beta(events_dict, node_mem, n_classes, end_time, beta):
     # return number of node pairs within a block pair, number of nodes per class
     block_pair_M_train, n_nodes_c = num_nodes_pairs_per_block_pair(node_mem, n_classes)
-    block_pairs_train = events_dict_to_blocks(events_dict, node_mem, n_classes)
+    block_pairs_train = events_dict_to_events_dict_bp(events_dict, node_mem, n_classes)
     # initialize paramters matrices
     mu_bp = np.zeros((n_classes, n_classes))
     alpha_n_bp = np.zeros((n_classes, n_classes))
@@ -459,11 +457,11 @@ def fit_4_alpha_single_beta(events_dict, node_mem, n_classes, end_time, beta):
     for i in range(n_classes):
         for j in range(n_classes):
             if i == j:  # diagonal block pair
-                params_est = OneBlockFit.fit_n_r_br_gr_one_dia_2(block_pairs_train[i][j], end_time,n_nodes_c[j,0],
+                params_est = one_beta_bp.fit_4_alpha_one_beta_dia(block_pairs_train[i][j], end_time,n_nodes_c[j,0],
                                                                  block_pair_M_train[i, j], beta)
 
             else:   # off-diagonal block pair
-                params_est = OneBlockFit.fit_n_r_br_gr_one_off_2(block_pairs_train[i][j],block_pairs_train[j][i],
+                params_est = one_beta_bp.fit_4_alpha_one_beta_off(block_pairs_train[i][j],block_pairs_train[j][i],
                                                        end_time, n_nodes_c[j,0], block_pair_M_train[i, j],beta)
             mu_bp[i, j] = params_est[0]
             alpha_n_bp[i, j] = params_est[1]
@@ -478,7 +476,7 @@ def fit_4_alpha_single_beta(events_dict, node_mem, n_classes, end_time, beta):
 def fit_6_alpha_single_beta(events_dict, node_mem, n_classes, end_time, beta):
     # return number of node pairs within a block pair, number of nodes per class
     block_pair_M_train, n_nodes_c = num_nodes_pairs_per_block_pair(node_mem, n_classes)
-    block_pairs_train = events_dict_to_blocks(events_dict, node_mem, n_classes)
+    block_pairs_train = events_dict_to_events_dict_bp(events_dict, node_mem, n_classes)
     # initialize paramters matrices
     mu_bp = np.zeros((n_classes, n_classes))
     alpha_n_bp = np.zeros((n_classes, n_classes))
@@ -490,11 +488,11 @@ def fit_6_alpha_single_beta(events_dict, node_mem, n_classes, end_time, beta):
     for i in range(n_classes):
         for j in range(n_classes):
             if i == j:  # diagonal block pair
-                params_est = OneBlockFit.fit_n_r_br_gr_al_alr_one_dia(block_pairs_train[i][j], end_time,n_nodes_c[j,0],
+                params_est = one_beta_bp.fit_6_alpha_one_beta_dia(block_pairs_train[i][j], end_time,n_nodes_c[j,0],
                                                                  block_pair_M_train[i, j], beta)
 
             else:   # off-diagonal block pair
-                params_est = OneBlockFit.fit_n_r_br_gr_al_alr_one_off(block_pairs_train[i][j],block_pairs_train[j][i],
+                params_est = one_beta_bp.fit_6_alpha_one_beta_dia(block_pairs_train[i][j],block_pairs_train[j][i],
                                                        end_time, n_nodes_c[j,0], block_pair_M_train[i, j],beta)
             mu_bp[i, j] = params_est[0]
             alpha_n_bp[i, j] = params_est[1]
@@ -511,7 +509,7 @@ def fit_6_alpha_single_beta(events_dict, node_mem, n_classes, end_time, beta):
 def fit_2_alpha_rho_single_beta(events_dict, node_mem, n_classes, end_time, beta):
     # return number of node pairs within a block pair, number of nodes per class
     bp_M_train, n_nodes_c = num_nodes_pairs_per_block_pair(node_mem, n_classes)
-    bps_train = events_dict_to_blocks(events_dict, node_mem, n_classes)
+    bps_train = events_dict_to_events_dict_bp(events_dict, node_mem, n_classes)
     # initialize paramters matrices
     mu_bp = np.zeros((n_classes, n_classes))
     alpha_bp = np.zeros((n_classes, n_classes))
@@ -519,7 +517,7 @@ def fit_2_alpha_rho_single_beta(events_dict, node_mem, n_classes, end_time, beta
     for i in range(n_classes):
         for j in range(n_classes):
             if i == j:  # diagonal block pair
-                params_est = OneBlockFit.fit_n_r_one_dia_2(bps_train[i][j], end_time, n_nodes_c[j,0], bp_M_train[i, j], beta)
+                params_est = one_beta_bp.fit_2_alpha_one_beta_dia(bps_train[i][j], end_time, n_nodes_c[j,0], bp_M_train[i, j], beta)
                 mu_bp[i, j] = params_est[0]
                 alpha_bp[i, j] = params_est[1]
                 if params_est[1] == 0:
@@ -527,7 +525,7 @@ def fit_2_alpha_rho_single_beta(events_dict, node_mem, n_classes, end_time, beta
                 else:
                     rho_bp[i, j] = params_est[2]/params_est[1]
             elif j > i:   # off-diagonal block pair & j>i
-                params_est = OneBlockFit.fit_n_r_one_off_rho(bps_train[i][j], bps_train[j][i], end_time,
+                params_est = one_beta_bp.fit_2_alpha_one_beta_off_rho(bps_train[i][j], bps_train[j][i], end_time,
                                                            n_nodes_c[i,0], n_nodes_c[j,0], beta)
                 mu_bp[i, j] = params_est[0]
                 mu_bp[j, i] = params_est[1]
@@ -554,7 +552,7 @@ def model_fit_single_beta(n_alpha, events_dict, node_mem, n_classes, end_time, b
 def fit_2_alpha_kernel_sum(events_dict, node_mem, n_classes, end_time, betas, ref=False):
     # return number of node pairs within a block pair, number of nodes per class
     block_pair_M_train, n_nodes_c = num_nodes_pairs_per_block_pair(node_mem, n_classes)
-    block_pairs_train = events_dict_to_blocks(events_dict, node_mem, n_classes)
+    block_pairs_train = events_dict_to_events_dict_bp(events_dict, node_mem, n_classes)
     # initialize paramters matrices
     mu_bp = np.zeros((n_classes, n_classes))
     alpha_n_bp = np.zeros((n_classes, n_classes))
@@ -563,10 +561,10 @@ def fit_2_alpha_kernel_sum(events_dict, node_mem, n_classes, end_time, betas, re
     for i in range(n_classes):
         for j in range(n_classes):
             if i == j:  # diagonal block pair
-                params_est = OneBlockFit.fit_2_alpha_kernel_sum_dia(block_pairs_train[i][j], end_time, n_nodes_c[j, 0],
+                params_est = sum_betas_bp.fit_2_alpha_kernel_sum_dia(block_pairs_train[i][j], end_time, n_nodes_c[j, 0],
                                                                     block_pair_M_train[i, j], betas)
             else:   # off-diagonal block pair
-                params_est = OneBlockFit.fit_2_alpha_kernel_sum_off(block_pairs_train[i][j], block_pairs_train[j][i],
+                params_est = sum_betas_bp.fit_2_alpha_kernel_sum_off(block_pairs_train[i][j], block_pairs_train[j][i],
                                                                     end_time, n_nodes_c[j,0], block_pair_M_train[i, j], betas)
             mu_bp[i, j] = params_est[0]
             alpha_n_bp[i, j] = params_est[1]
@@ -583,7 +581,7 @@ def fit_2_alpha_kernel_sum(events_dict, node_mem, n_classes, end_time, betas, re
 def fit_4_alpha_kernel_sum(events_dict, node_mem, n_classes, end_time, betas, ref=False):
     # return number of node pairs within a block pair, number of nodes per class
     block_pair_M_train, n_nodes_c = num_nodes_pairs_per_block_pair(node_mem, n_classes)
-    block_pairs_train = events_dict_to_blocks(events_dict, node_mem, n_classes)
+    block_pairs_train = events_dict_to_events_dict_bp(events_dict, node_mem, n_classes)
     # initialize paramters matrices
     mu_bp = np.zeros((n_classes, n_classes))
     alpha_n_bp = np.zeros((n_classes, n_classes))
@@ -594,10 +592,10 @@ def fit_4_alpha_kernel_sum(events_dict, node_mem, n_classes, end_time, betas, re
     for i in range(n_classes):
         for j in range(n_classes):
             if i == j:  # diagonal block pair
-                params_est = OneBlockFit.fit_4_alpha_kernel_sum_dia(block_pairs_train[i][j], end_time, n_nodes_c[j, 0],
+                params_est = sum_betas_bp.fit_4_alpha_kernel_sum_dia(block_pairs_train[i][j], end_time, n_nodes_c[j, 0],
                                                                     block_pair_M_train[i, j], betas)
             else:   # off-diagonal block pair
-                params_est = OneBlockFit.fit_4_alpha_kernel_sum_off(block_pairs_train[i][j], block_pairs_train[j][i],
+                params_est = sum_betas_bp.fit_4_alpha_kernel_sum_off(block_pairs_train[i][j], block_pairs_train[j][i],
                                                                     end_time, n_nodes_c[j,0], block_pair_M_train[i, j], betas)
             mu_bp[i, j] = params_est[0]
             alpha_n_bp[i, j] = params_est[1]
@@ -616,7 +614,7 @@ def fit_4_alpha_kernel_sum(events_dict, node_mem, n_classes, end_time, betas, re
 def fit_6_alpha_kernel_sum(events_dict, node_mem, n_classes, end_time, betas, ref=False):
     # return number of node pairs within a block pair, number of nodes per class
     block_pair_M_train, n_nodes_c = num_nodes_pairs_per_block_pair(node_mem, n_classes)
-    block_pairs_train = events_dict_to_blocks(events_dict, node_mem, n_classes)
+    block_pairs_train = events_dict_to_events_dict_bp(events_dict, node_mem, n_classes)
     # initialize paramters matrices
     mu_bp = np.zeros((n_classes, n_classes))
     alpha_n_bp = np.zeros((n_classes, n_classes))
@@ -629,10 +627,10 @@ def fit_6_alpha_kernel_sum(events_dict, node_mem, n_classes, end_time, betas, re
     for i in range(n_classes):
         for j in range(n_classes):
             if i == j:  # diagonal block pair
-                params_est = OneBlockFit.fit_6_alpha_kernel_sum_dia(block_pairs_train[i][j], end_time, n_nodes_c[j, 0],
+                params_est = sum_betas_bp.fit_6_alpha_kernel_sum_dia(block_pairs_train[i][j], end_time, n_nodes_c[j, 0],
                                                                     block_pair_M_train[i, j], betas)
             else:   # off-diagonal block pair
-                params_est = OneBlockFit.fit_6_alpha_kernel_sum_off(block_pairs_train[i][j], block_pairs_train[j][i],
+                params_est = sum_betas_bp.fit_6_alpha_kernel_sum_off(block_pairs_train[i][j], block_pairs_train[j][i],
                                                                     end_time, n_nodes_c[j,0], block_pair_M_train[i, j], betas)
             mu_bp[i, j] = params_est[0]
             alpha_n_bp[i, j] = params_est[1]
@@ -650,6 +648,7 @@ def fit_6_alpha_kernel_sum(events_dict, node_mem, n_classes, end_time, betas, re
         return params_tuple, ll_train, num_events_train, block_pairs_train, n_nodes_c
     else:
         return params_tuple, ll_train, num_events_train
+
 # sum of kernels model fitting funtion - external call - n_alpha specifies version of the model
 def model_fit_kernel_sum(n_alpha, events_dict, node_mem, n_classes, end_time, betas, ref=False):
     if n_alpha == 2:
@@ -699,7 +698,7 @@ def cal_recip_trans_motif(events_dict, N, motif_delta,  dataset="", save=False):
             dataset_motif[i,j] = G_data.calculate_temporal_motifs(motifs[i][j], motif_delta)
         print(f"{dataset_motif[i,0]:>10}{dataset_motif[i,1]:>10}{dataset_motif[i,2]:>10}{dataset_motif[i,3]:>10}"
               f"{dataset_motif[i,4]:>10}{dataset_motif[i,5]:>10}")
-    n_events = OneBlockFit.cal_num_events_2(events_dict)
+    n_events = sum_betas_bp.cal_num_events(events_dict)
     if save:
         results_dict = {}
         results_dict["dataset_motif"] = dataset_motif
