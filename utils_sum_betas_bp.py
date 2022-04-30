@@ -3,7 +3,7 @@ import numpy as np
 from scipy.optimize import minimize, approx_fprime
 from bisect import bisect_left
 import time
-import utils_generate_bp as generate_bp
+import utils_generate_sum_betas_model as generate_bp
 
 
 

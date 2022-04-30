@@ -29,6 +29,19 @@ def plot_paramters2(param_tup, n_alpha):
         fig.savefig(f"/shared/Results/MultiBlockHawkesModel/figures/MID_casestudy/{param_name[i]}.pdf")
         plt.show()
 
+def plot_kernel(alpha, betas, C, time_range):
+    lambda_sum = []
+    for t in time_range:
+        lambda_sum.append(alpha * np.sum(betas * C * np.exp(-t * betas)))
+    plt.figure()
+    plt.plot(time_range, lambda_sum, color='red', label=f"betas1={betas}")
+    plt.xlabel("t(s)")
+    plt.ylabel("lambda(t)")
+    plt.yscale('log')
+    plt.title('sum of kernels C=[0.33, 0.33, 0.34] - y-log scale ')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
 
 def print_model_param_kernel_sum(params_est):
     print("mu")

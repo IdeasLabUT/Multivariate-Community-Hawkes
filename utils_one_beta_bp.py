@@ -4,7 +4,7 @@ from bisect import bisect_left
 import time
 import sys
 
-import utils_generate_bp as generate_bp
+import utils_generate_sum_betas_model as generate_bp
 from os import path, getcwd
 sys.path.append(path.join(getcwd(), "hawkes"))
 
