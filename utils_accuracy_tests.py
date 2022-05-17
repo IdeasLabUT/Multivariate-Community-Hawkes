@@ -1,4 +1,5 @@
 # TODO delete those link prediction experiments
+# NOTE MID is reading version where nodes not in train is removed
 
 import networkx as nx
 import numpy as np
@@ -10,14 +11,14 @@ import pickle
 import sys
 import copy
 
-from utils_sum_betas_bp import cal_num_events
-from utils_fit_sum_betas_model import event_dict_to_adjacency
+from utils_fit_bp import cal_num_events
+from utils_fit_model import event_dict_to_adjacency
 from utils_generate_sum_betas_model import simulate_sum_kernel_model
 from dynetworkx import ImpulseDiGraph
 
 sys.path.append("./CHIP-Network-Model")
 from dataset_utils import load_enron_train_test, load_reality_mining_test_train
-import utils_fit_sum_betas_model as MBHP
+import utils_fit_model as MBHP
 from bisect import bisect_left
 
 
@@ -72,6 +73,19 @@ def cal_recip_trans_motif(events_dict, N, motif_delta, verbose=False,save_name=N
 
 def simulate_count_motif_experiment(dataset_motif_tuple, param, nodes_mem, K, T_sim, motif_delta, n_sim=10,
                                     verbose=False):
+    """
+    Simulate networks from MULCH fit parameters and compute temporal motif counts
+
+    :param dataset_motif_tuple: actual dataset (reciprocity, transitivity, motif_counts, dataset_n_events_train)
+    :param param:
+    :param nodes_mem:
+    :param K:
+    :param T_sim:
+    :param motif_delta:
+    :param n_sim:
+    :param verbose:
+    :return:
+    """
     dataset_recip, dataset_trans, dataset_motif, dataset_n_events = dataset_motif_tuple
     # simulate and count motifs
     if verbose:
@@ -370,7 +384,7 @@ if __name__ == "__main__":
         K = 1
         print(f"{dataset} Dataset at K = {K}")
     elif dataset == "MID":
-        with open(f'./storage/datasets/MID/MID_train_all_test.p', 'rb') as file:
+        with open(f'./storage/datasets/MID/MID_remove_nodes/MID_train_all_test.p', 'rb') as file:
             train_tup, all_tup, test_set = pickle.load(file)
         # read version with nodes not in train removed and timestamped scaled [0:1000]
         train_list, end_time_train, n_nodes_train, n_events_train, id_node_map_train = train_tup

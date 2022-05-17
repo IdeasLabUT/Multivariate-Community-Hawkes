@@ -1,24 +1,27 @@
-# TODO one beta has no refinement <-- maybe remove
+# TODO remove one beta
 # TODO SUBMISSION: remove docker and all saving or read saved options
-# TODO maybe change MID formate to be csv file
+# Note: changed MID format to csv file as an example for read_csv function
+# NOTE load MID function from graph is not used
 # TODO remove saved motif of dataset
 
 import numpy as np
 import pickle
+import networkx as nx
+import os
 import matplotlib.pyplot as plt
+
 
 import utils_accuracy_tests as accuracy_test
 from utils_fit_one_beta_model import model_fit_cal_log_likelihood_one_beta
-from refinement_alg import model_fit_cal_log_likelihood_sum_betas
-from utils_sum_betas_bp import cal_num_events
-from utils_fit_sum_betas_model import get_node_id_maps
+from utils_fit_refine_mulch import fit_refinement_mulch
+import utils_fit_model as mulch_fit
 from Read_results import analyze_block
-import networkx as nx
-import os
+
 
 
 
 #%% helper functions
+
 def load_data_train_all(dnx_pickle_file_name, split_ratio=0.8, scale=1000, remove_small_comp=True):
     incident_dnx_list = pickle.load(open(dnx_pickle_file_name, 'rb'))
     digraph1 = incident_dnx_list[0]
@@ -47,10 +50,10 @@ def load_data_train_all(dnx_pickle_file_name, split_ratio=0.8, scale=1000, remov
     # get train and all nodes id map
     node_set_all = set(digraph1.nodes(end=timestamp_last_all))
     n_nodes_all = len(node_set_all)
-    node_id_map_all, id_node_map_all = get_node_id_maps(node_set_all)
+    node_id_map_all, id_node_map_all = mulch_fit.get_node_id_maps(node_set_all)
     node_set_train = set(digraph1.nodes(end=timestamp_last_train))
     n_nodes_train = len(node_set_train)
-    node_id_map_train, id_node_map_train = get_node_id_maps(node_set_train)
+    node_id_map_train, id_node_map_train = mulch_fit.get_node_id_maps(node_set_train)
 
     # create event dictionary of train and all dataset
     event_dict_all = {}
@@ -120,12 +123,13 @@ if __name__ == "__main__":
         save_path = f'/shared/Results/MultiBlockHawkesModel'
 
     """ sum of kernel refinement fitting """
-    sum_betas_K_range = [4]  # ex: list(range(1,11))
-    n_alpha = 6
+    K_range = []  # ex: list(range(1,11))
+    n_alpha = 6 # either
     fit_model = True  # either fit mulch or read saved fit
-    save_fit = True  # save fitted model - specify path
-    REF_ITER = 3  # maximum refinement interation - set to 0 for no refinement
-    betas_recip = np.array([2 * 30, 2 * 7, 1 / 2]) * (1000 / 8380)  # [2 month, 2 week, 12 hours]
+    save_fit = False  # save fitted model - specify path
+    REF_ITER = 0  # maximum refinement interation - set to 0 for no refinement
+    # betas_recip = np.array([2 * 30, 2 * 7, 1 / 2]) * (1000 / 8380)  # [2 month, 2 week, 12 hours]
+    betas_recip = np.array([30])* (1000 / 8380)
     betas = np.reciprocal(betas_recip)
 
     # OTHER betas options
@@ -133,14 +137,14 @@ if __name__ == "__main__":
     # betas_recip = np.array([2*30, 7, 1/12]) * (1000 / 8380)  # [2 month, 1week, 2 hour]
     # betas_recip = np.array([30, 7, 1]) * (1000 / 8380)  # [1 month, 1 week, 1 day]
 
-    """ motif simulation """
-    motif_experiment = False
-    n_motif_simulations = 5
-    save_motif = True  # save simulation motif counts - specify path
+    """ Simulation from fit and count motifs  experiment"""
+    motif_experiment = True
+    n_motif_simulations = 2
+    save_motif = False # save simulation motif counts - specify path
 
-    """ link prediction """
+    """ link prediction experiment"""
     link_prediction_experiment = True
-    save_link = True  # specify path in code
+    save_link = False  # specify path in code
 
     """ single beta"""
     block_range = []  # ex: list(range(1,11))
@@ -150,36 +154,77 @@ if __name__ == "__main__":
 
     print("Load MID dataset - timestampes scaled [0:1000]")
     print("Added random Gaussian noise (mean=0, std=1hour) to events with same timestamp")
-    pickle_file = os.path.join(os.getcwd(), "storage", "datasets", "MID", "MID_std1hour.p")
-    train_tup, all_tup, nodes_not_in_train = load_data_train_all(pickle_file)
-    events_dict_train, T_train, n_nodes_train, n_events_train, id_node_map_train = train_tup
-    events_dict_all, T_all, n_nodes_all, n_events_all, id_node_map_all = all_tup
+    # pickle_file = os.path.join(os.getcwd(), "storage", "datasets", "MID", "MID_std1hour.p")
+    # train_tup, all_tup, nodes_not_in_train1 = load_data_train_all(pickle_file)
+    # events_dict_train1, T_train1, n_nodes_train1, n_events_train1, id_node_map_train1 = train_tup
+    # events_dict_all1, T_all1, n_nodes_all1, n_events_all1, id_node_map_all1 = all_tup
+
+    file_path_csv = os.path.join(os.getcwd(), "storage", "datasets", "MID", "MID.csv")
+    # read MID csv file. Data stored as 3 columns (attacker country, attacked country, timestamp)
+    train_tup, all_tup, nodes_not_in_train = mulch_fit.read_csv_split_train(file_path_csv, delimiter=',')
+    # train and full dataset tuples
+    events_dict_train, n_nodes_train, T_train, n_events_train, id_node_map_train = train_tup
+    events_dict_all, n_nodes_all, T_all, n_events_all, id_node_map_all = all_tup
+
     dataset = "MID"
-    link_pred_delta = 7.15
-    motif_delta_month = 4
+    link_pred_delta = 7.15 # two month link prediction delta
+    motif_delta_month = 4 # around one month motif delta
 
 
 
 #%% refinement - implemented for sum of kernel versions
-    if len(sum_betas_K_range) !=0:
-        print(f"Fit MID using {n_alpha}-alpha (sum of kernel) at betas={betas}")
-        train_tup = events_dict_train, n_nodes_train, T_train
-        all_tup = events_dict_all, n_nodes_all, T_all
-    for K in sum_betas_K_range:
+    if len(K_range) !=0:
+        print(f"Fit MID using {n_alpha}-alpha (sum of kernel) model at betas={betas}")
+    for K in K_range:
         if fit_model:
-            print("\nfit MULCH + refinement at K=", K)
-            fit_dict = model_fit_cal_log_likelihood_sum_betas(train_tup, all_tup, nodes_not_in_train, n_alpha, K, betas,
-                                                              REF_ITER, verbose=True)
-            # NOTE: if max_iter=0 no refinement tuple is returned
-            print(f"spectral log-likelihood:\ttrain={fit_dict['ll_train_sp']:.3f}\tall={fit_dict['ll_all_sp']:.3f}"
-                  f"\ttest={fit_dict['ll_test_sp']:.3f}")
-            print(f"refine log-likelihood:  \ttrain={fit_dict['ll_train_ref']:.3f}\tall={fit_dict['ll_all_ref']:.3f}"
-                  f"\ttest={fit_dict['ll_test_ref']:.3f}")
+            print("\nFit MULCH + refinement at K=", K)
+            sp_tup, ref_tup, ref_message = fit_refinement_mulch(events_dict_train, n_nodes_train, T_train, K,
+                                                                betas, n_alpha, max_iter=REF_ITER, verbose=True)
 
-            print("\nAnalyze countries per block membership")
-            analyze_block(fit_dict["node_mem_train_ref"], K, id_node_map_train)
+            # Fit results using spectral clustering for node membership
+            nodes_mem_train_sp, fit_param_sp, ll_train_sp, n_events_train, fit_time_sp = sp_tup
+            node_mem_all_sp = mulch_fit.assign_node_membership_for_missing_nodes(nodes_mem_train_sp, nodes_not_in_train)
+            ll_all_sp, n_events_all = mulch_fit.model_LL_kernel_sum(fit_param_sp, events_dict_all, node_mem_all_sp, K,
+                                                                    T_all)
+            ll_all_event_sp = ll_all_sp / n_events_all
+            ll_train_event_sp = ll_train_sp / n_events_train
+            ll_test_event_sp = (ll_all_sp - ll_train_sp) / (n_events_all - n_events_train)
+
+            # Fit results after refinement iterations
+            nodes_mem_train_ref, fit_param_ref, ll_train_ref, num_events, fit_time_ref = ref_tup
+            nodes_mem_all_ref = mulch_fit.assign_node_membership_for_missing_nodes(nodes_mem_train_ref,
+                                                                                   nodes_not_in_train)
+            ll_all_ref, n_events_all = mulch_fit.model_LL_kernel_sum(fit_param_ref, events_dict_all, nodes_mem_all_ref,
+                                                                     K, T_all)
+            ll_all_event_ref = ll_all_ref / n_events_all
+            ll_train_event_ref = ll_train_ref / n_events_train
+            ll_test_event_ref = (ll_all_ref - ll_train_ref) / (n_events_all - n_events_train)
+
+            print(f"spectral log-likelihood:\ttrain={ll_train_event_sp:.3f}\tall={ll_all_event_sp:.3f}"
+                  f"\ttest={ll_test_event_sp:.3f}")
+            print(f"refinement log-likelihood:  \ttrain={ll_train_event_ref:.3f}\tall={ll_all_event_ref:.3f}"
+                  f"\ttest={ll_test_event_ref:.3f}")
 
             if save_fit:
+                fit_dict = {}
+                fit_dict["fit_param_ref"] = fit_param_ref
+                fit_dict["node_mem_train_ref"] = nodes_mem_train_ref
+                fit_dict["node_mem_all_ref"] = nodes_mem_all_ref
+                fit_dict["ll_train_ref"] = ll_train_event_ref
+                fit_dict["ll_all_ref"] = ll_all_event_ref
+                fit_dict["ll_test_ref"] = ll_test_event_ref
+                fit_dict["fit_param_sp"] = fit_param_sp
+                fit_dict["node_mem_train_sp"] = nodes_mem_train_sp
+                fit_dict["node_mem_all_sp"] = node_mem_all_sp
+                fit_dict["ll_train_sp"] = ll_train_event_sp
+                fit_dict["ll_all_sp"] = ll_all_event_sp
+                fit_dict["ll_test_sp"] = ll_test_event_sp
+                fit_dict["message"] = ref_message
+                fit_dict["n_classes"] = K
+                fit_dict["fit_time_sp(s)"] = fit_time_sp
+                fit_dict["fit_time_ref(s)"] = fit_time_ref
+                fit_dict["train_end_time"] = T_train
+                fit_dict["all_end_time"] = T_all
                 fit_dict["id_node_map_train"] = id_node_map_train
                 fit_dict["id_node_map_all"] = id_node_map_all
                 full_fit_path = f'{save_path}/MID/test'
@@ -192,6 +237,11 @@ if __name__ == "__main__":
             full_fit_path = f"{save_path}/MID/6alpha_KernelSum_Ref_batch/2month1week2hour"
             with open(f"{full_fit_path}/k_{K}.p", 'rb') as f:
                 fit_dict = pickle.load(f)
+            # refinement parameters
+            fit_param_ref = fit_dict["fit_param_ref"]
+            nodes_mem_train_ref = fit_dict["node_mem_train_ref"]
+            nodes_mem_all_ref = fit_dict["node_mem_all_ref"]
+            ll_test_event_ref = fit_dict["ll_test_ref"]
             print(f"spectral log-likelihood:\ttrain={fit_dict['ll_train_sp']:.3f}\tall={fit_dict['ll_all_sp']:.3f}"
                   f"\ttest={fit_dict['ll_test_sp']:.3f}")
             print(f"refine log-likelihood:  \ttrain={fit_dict['ll_train_ref']:.3f}\tall={fit_dict['ll_all_ref']:.3f}"
@@ -199,12 +249,9 @@ if __name__ == "__main__":
 
         # Simulation and motif experiments
         if motif_experiment:
-
-            # refinement parameters
-            fit_param_ref = fit_dict["fit_param_ref"]
-            nodes_mem_train_ref = fit_dict["node_mem_train_ref"]
-
             # ---> Either run motif counts on dataset
+            # # compute dataset's reciprocity, transitivity, and temporal motifs counts
+            # motif counts is a (6, 6) matrix
             # dataset_recip, dataset_trans, dataset_motif_month = accuracy_test.cal_recip_trans_motif(events_dict_train,
             #                                                                                         n_nodes_train,
             #                                                                                         motif_delta_month,
@@ -222,7 +269,7 @@ if __name__ == "__main__":
             print(f"{dataset}: reciprocity={recip:.4f}, transitivity={trans:.4f}, #events:{n_events_train}")
             dataset_motif_tup = (recip, trans, dataset_motif_month, n_events_train)
 
-            # run simulation and count motifs
+            # Simulate networks using MULCH fit parameters and compute motif counts
             motif_test_dict = accuracy_test.simulate_count_motif_experiment(dataset_motif_tup, fit_param_ref,
                                                                             nodes_mem_train_ref, K, T_train,
                                                                             motif_delta_month,
@@ -238,8 +285,6 @@ if __name__ == "__main__":
         # Link prediction experiment -- NOTE: didn't remove nodes from train
         if link_prediction_experiment and n_alpha == 6:
 
-            fit_params_tup = fit_dict["fit_param_ref"]
-            nodes_mem_all = fit_dict["node_mem_all_ref"]  # <--- using full node membership
             t0s = np.loadtxt(f"storage/t0/{dataset}_t0.csv", delimiter=',', usecols=1)
             runs = len(t0s)
             auc = np.zeros(runs)
@@ -250,30 +295,31 @@ if __name__ == "__main__":
                 y_mulch, pred_mulch = accuracy_test.mulch_predict_probs_and_actual(n_nodes_all, t0,
                                                                                    link_pred_delta,
                                                                                    events_dict_all,
-                                                                                   fit_params_tup,
-                                                                                   nodes_mem_all)
+                                                                                   fit_param_ref,
+                                                                                   nodes_mem_all_ref)
                 y_runs[:, :, i] = y_mulch
                 pred_runs[:, :, i] = pred_mulch
                 auc[i] = accuracy_test.calculate_auc(y_mulch, pred_mulch, show_figure=False)
                 print(f"at i={i} -> auc={auc[i]}")
 
-            print(f"{fit_dict['ll_test_ref']:.5f}\t{K}\t{np.average(auc):.5f}\t{auc.std():.3f}")
+            print(f"{ll_test_event_ref:.5f}\t{K}\t{np.average(auc):.5f}\t{auc.std():.3f}")
             if save_link:
                 full_link_path = f"{save_path}/AUC/{dataset}"
                 pickle_file_name = f"{full_link_path}/auc_k{K}.p"
                 auc_dict = {"t0": t0s, "auc": auc, "avg": np.average(auc), "std": auc.std(), "y__runs": y_runs,
-                            "pred_runs": pred_runs, "ll_test": fit_dict['ll_test_ref']}
+                            "pred_runs": pred_runs, "ll_test": ll_test_event_ref}
                 with open(pickle_file_name, 'wb') as f:
                     pickle.dump(auc_dict, f)
 
-#%% Fit multiblock Hawkes using one beta model
-    beta = 3.57 # 1 month
-    if len(block_range) !=0:
-        print(f"Fit {n_alpha}-alpha single beta={beta}")
-        train_tup = events_dict_train, n_nodes_train, T_train
-        all_tup = events_dict_all, n_nodes_all, T_all
-    for n_classes in block_range:
-        fit_dict = model_fit_cal_log_likelihood_one_beta(train_tup, all_tup, nodes_not_in_train, n_alpha,
-                                                         n_classes, beta, save_file="")
-        print(f"log-likelihood:train={fit_dict['ll_train']:.3f}\tall={fit_dict['ll_all']:.3f}"
-              f"\ttest={fit_dict['ll_test']:.3f}")
+
+# #%% Fit multiblock Hawkes using one beta model
+#     beta = 0.279 # 1 month
+#     if len(block_range) !=0:
+#         print(f"Fit {n_alpha}-alpha single beta={beta}")
+#         train_tup = events_dict_train, n_nodes_train, T_train
+#         all_tup = events_dict_all, n_nodes_all, T_all
+#     for n_classes in block_range:
+#         fit_dict = model_fit_cal_log_likelihood_one_beta(train_tup, all_tup, nodes_not_in_train, n_alpha,
+#                                                          n_classes, beta, save_file="")
+#         print(f"log-likelihood:train={fit_dict['ll_train']:.3f}\tall={fit_dict['ll_all']:.3f}"
+#               f"\ttest={fit_dict['ll_test']:.3f}")

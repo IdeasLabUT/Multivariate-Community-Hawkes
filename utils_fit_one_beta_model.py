@@ -4,7 +4,7 @@ import numpy as np
 import time
 import pickle
 import utils_one_beta_bp as one_beta_bp
-import utils_fit_sum_betas_model as mulch_fit_util
+import utils_fit_model as mulch_fit_util
 
 
 def model_fit_cal_log_likelihood_one_beta(train_tup, all_tup, nodes_not_in_train, n_alpha, n_classes, beta, save_file=""):
@@ -53,6 +53,33 @@ def model_fit_cal_log_likelihood_one_beta(train_tup, all_tup, nodes_not_in_train
             pickle.dump(results_dict, f)
     return results_dict
 
+
+
+def print_model_param_single_beta(params_est):
+    print("mu")
+    print(params_est[0])
+    print("\nalpha_n")
+    print(params_est[1])
+    print("\nalpha_r")
+    print(params_est[2])
+    if len(params_est)==4:
+        print("\nbeta")
+        print(params_est[3])
+    else:
+        print("\nalpha_br")
+        print(params_est[3])
+        print("\nalpha_gr")
+        print(params_est[4])
+        if len(params_est)==6:
+            print("\nbeta")
+            print(params_est[5])
+        else:
+            print("\nalpha_al")
+            print(params_est[5])
+            print("\nalpha_alr")
+            print(params_est[6])
+            print("\nbeta")
+            print(params_est[7])
 #%% mulch one beta log-likelihood functions
 
 def model_LL_one_beta(param, events_dict, node_mem, k, end_time):
@@ -210,11 +237,11 @@ def fit_6_alpha_single_beta(events_dict, node_mem, n_classes, end_time, beta):
     for i in range(n_classes):
         for j in range(n_classes):
             if i == j:  # diagonal block pair
-                params_est = one_beta_bp.fit_6_alpha_one_beta_dia(block_pairs_train[i][j], end_time,n_nodes_c[j,0],
+                params_est = one_beta_bp.fit_6_alpha_one_beta_dia(block_pairs_train[i][j], end_time, n_nodes_c[j,0],
                                                                  block_pair_M_train[i, j], beta)
 
             else:   # off-diagonal block pair
-                params_est = one_beta_bp.fit_6_alpha_one_beta_dia(block_pairs_train[i][j],block_pairs_train[j][i],
+                params_est = one_beta_bp.fit_6_alpha_one_beta_off(block_pairs_train[i][j],block_pairs_train[j][i],
                                                        end_time, n_nodes_c[j,0], block_pair_M_train[i, j],beta)
             mu_bp[i, j] = params_est[0]
             alpha_n_bp[i, j] = params_est[1]

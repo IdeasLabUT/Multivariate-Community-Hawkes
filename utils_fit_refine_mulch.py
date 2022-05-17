@@ -1,18 +1,20 @@
 # TODO: refinement function can be moved to sum betas model fit file
+# TODO: rename all refinemnet functions
+# TODO: remove model_fit_cal_log_likelihood_sum_betas() function
 
 import numpy as np
 import time
 import copy
 from sklearn.metrics import adjusted_rand_score
-import utils_fit_sum_betas_model as mulch_fit
-import utils_sum_betas_bp as mulch_fit_bp
+import utils_fit_model as mulch_fit
+import utils_fit_bp as mulch_fit_bp
 from utils_generate_sum_betas_model import simulate_sum_kernel_model
 
 def model_fit_cal_log_likelihood_sum_betas(train_tup, all_tup, nodes_not_in_train, n_alpha, K, betas, ref_iter, verbose):
     events_dict_train, n_nodes_train, T_train = train_tup
     events_dict_all, n_nodes_all, T_all= all_tup
-    sp_tup, ref_tup, ref_message = model_fit_refine_kernel_sum_exact(events_dict_train, n_nodes_train, T_train, K,
-                                                                     betas, n_alpha, max_iter=ref_iter, verbose=verbose)
+    sp_tup, ref_tup, ref_message = fit_refinement_mulch(events_dict_train, n_nodes_train, T_train, K,
+                                                        betas, n_alpha, max_iter=ref_iter, verbose=verbose)
 
     # spectral clustering fit results
     nodes_mem_train_sp, fit_param_sp, ll_train_sp, n_events_train, fit_time_sp = sp_tup
@@ -57,6 +59,7 @@ def model_fit_cal_log_likelihood_sum_betas(train_tup, all_tup, nodes_not_in_trai
 #%% Exact
 
 def cal_new_event_dict_bp(idx, from_block, to_block, events_dict_bp, K):
+    """ calculate new per block_pair events_dict of moving one node (idx) from one block to another """
     events_dict_bp1 = copy.deepcopy(events_dict_bp)
     # move node pair from (a,*) to (b,*)
     for k in range(K):
@@ -72,8 +75,9 @@ def cal_new_event_dict_bp(idx, from_block, to_block, events_dict_bp, K):
                 events_dict_bp1[k][to_block][i, j] = timestamps
     return events_dict_bp1
 
-def cal_new_LL_kernel_sum_move_node(param_tup, T, idx, from_block, to_block, events_dict_bp, N_c, LL_bp, batch = True):
-    K = len(N_c)
+def cal_new_LL_kernel_sum_move_node(param_tup, T, idx, from_block, to_block, events_dict_bp, n_K, LL_bp, batch = True):
+    """ calculate new per block_pair log-likelihoods of moving one node (idx) from one block to another """
+    K = len(n_K)
     if len(param_tup) == 9:
         mu_bp, alpha_n_bp, alpha_r_bp, alpha_br_bp, alpha_gr_bp, alpha_al_bp, alpha_alr_bp, C_bp, betas = param_tup
     elif len(param_tup) == 7:
@@ -85,7 +89,7 @@ def cal_new_LL_kernel_sum_move_node(param_tup, T, idx, from_block, to_block, eve
     events_dict_bp1 = cal_new_event_dict_bp(idx, from_block, to_block, events_dict_bp, K)
 
     # calculate new n_nodes_per_class
-    N_c1 = np.copy(N_c)
+    N_c1 = np.copy(n_K)
     N_c1[from_block, 0] -=1
     N_c1[to_block, 0] += 1
     # calculate new M_bp
@@ -123,73 +127,110 @@ def cal_new_LL_kernel_sum_move_node(param_tup, T, idx, from_block, to_block, eve
     else:
         return events_dict_bp1, N_c1, LL_bp1
 
-def nodes_mem_refinement_batch(nodes_mem, events_dict_bp, param, T, N_c, LL_bp):
-    K = len(N_c)
+def nodes_mem_refinement_batch(nodes_mem, events_dict_bp, param, end_time, n_K, LL_bp):
+    """
+    calculate new refined nodes membership given current node membership and MULCH fit parameters
+
+    :param nodes_mem: (n,) array(int) of nodes membership
+    :param events_dict_bp: KxK list, each element events_dict[a][b] is events_dict of the block pair (a, b)
+    :param tuple param: mulch parameters (m
+    :param float end_time: network duration
+    :param n_K: (K,) array(int) number of nodes per block
+    :param LL_bp: (K, K) array, where LL_bp[a, b] is log-likelihood of block pair (a, b)
+    :return: (n,) array(int) refined nodes membership
+    """
+    K = len(n_K)
     current_ll = np.sum(LL_bp)
     nodes_mem_ref = np.copy(nodes_mem)
     for node_i, from_block in enumerate(nodes_mem):
         # only try to move node if it's not in a block by itself
-        if N_c[from_block] > 1:
+        if n_K[from_block] > 1:
             # holds log-likelihood scores when assigning node_i to different blocks
             node_i_LL_score = np.zeros(K)
             node_i_LL_score[from_block] = current_ll
             # loop through all block and change membership of node_i
             for to_block in range(K):
                 if to_block != from_block:
-                    node_i_LL_score[to_block] = cal_new_LL_kernel_sum_move_node(param, T, node_i, from_block, to_block,
-                                                                                events_dict_bp, N_c, LL_bp)
+                    node_i_LL_score[to_block] = cal_new_LL_kernel_sum_move_node(param, end_time, node_i, from_block, to_block,
+                                                                                events_dict_bp, n_K, LL_bp)
             nodes_mem_ref[node_i] = np.argmax(node_i_LL_score)
     return nodes_mem_ref
 
 # Model fit and refine functions
-def model_fit_refine_kernel_sum_exact(events_dict, N, end_time, K, betas, n_alpha=6, max_iter=0,verbose=False,
-                                      nodes_mem_true=None):
-    # nodes_mem_true: only for simulation data
+def fit_refinement_mulch(events_dict, n, end_time, K, betas, n_alpha=6, max_iter=0, verbose=False,
+                         nodes_mem_true=None):
+    """
+    fit MULCH on the network and refine nodes membership
+
+    1) run spectral clustering, get nodes membership, and fit MULCH.
+    2) run refinement algorithm and re-fit MULCH.
+    3) repeat step(2) until one of the followings:
+        - nodes membership converge
+        - model log-likelihood decreases
+        - number of classes decreases
+        - Maximum number refinement iteration reached
+
+    :param dict events_dict: dataset formatted as a dictionary {(u, v) node pairs in network : [t1, t2, ...] array of
+        events between (u, v)}
+    :param int n: number of nodes in network
+    :param float end_time: duration of network
+    :param int K: number of blocks
+    :param array betas: (Q,) array of decays
+    :param int n_alpha: (Optional) number of excitation types. Choose between 2, 4, or 6. Default is 6 types (full model)
+    :param int max_iter: (Optional) maximum number of refinement iterations. Default is 0 (no refinement)
+    :param verbose: (Optional) print fitting details
+    :param nodes_mem_true: (Optional) only when true nodes membership is known (in case simulation test)
+    :return: two tuples of MULCH fitting results using both spectral clustering and refined nodes membership.
+        Each result tuple = (nodes_mem, fit_parameters, log-likelihood, #events, time_to_fit_sec).
+        Also return refinement status message.
+    :rtype: (tuple, tuple, str)
+    """
 
     # 1) run spectral clustering
     if verbose:
-        print("\nRun spectral clustering and fit mulch")
+        print("\nRun spectral clustering and fit MULCH")
     start_fit_time = time.time()
-    agg_adj = mulch_fit.event_dict_to_aggregated_adjacency(N, events_dict)
+    agg_adj = mulch_fit.event_dict_to_aggregated_adjacency(n, events_dict)
     nodes_mem0 = mulch_fit.spectral_cluster1(agg_adj, K, n_kmeans_init=500, normalize_z=True, multiply_s=True)
     if nodes_mem_true is not None and verbose:
-        print(f"\tadusted RI between true and sp = {adjusted_rand_score(nodes_mem_true, nodes_mem0):.3f}")
+        print(f"\tadjusted RI between true and spectral membership = {adjusted_rand_score(nodes_mem_true, nodes_mem0):.3f}")
 
     # if verbose:
     #     MBHP.plot_adj(agg_adj, nodes_mem0, K, f"Spectral membership K={K}")
     #     classes, n_node_per_class = np.unique(nodes_mem0, return_counts=True)
     #     print("\tnodes/class# : ", np.sort(n_node_per_class/np.sum(n_node_per_class)))
 
-    # 2) fit model and get parameters, LL
-    fit_param0, LL_bp0, num_events, events_dict_bp0, N_c0 = mulch_fit.model_fit_kernel_sum(n_alpha, events_dict, nodes_mem0,
-                                                                                           K, end_time, betas, ref=True)
+    # 2) fit model and get parameters, log-likelihood
+    fit_param0, LL_bp0, num_events, events_dict_bp0, N_c0 = mulch_fit.model_fit_kernel_sum(n_alpha, events_dict,
+                                                                                           nodes_mem0, K, end_time,
+                                                                                           betas, ref=True)
     spectral_fit_time = time.time() - start_fit_time
     if verbose:
         print("\tlog-likelihood = ", np.sum(LL_bp0))
     # MBHP.print_model_param_kernel_sum(fit_param0)
-
     sp_tuple = (nodes_mem0, fit_param0, np.sum(LL_bp0), num_events, spectral_fit_time)
+
     # no refinement needed if K=1
     if K == 1:
         return sp_tuple, sp_tuple, "No refinement needed at K=1"
     if max_iter == 0:
         return sp_tuple, sp_tuple, "No refinement (MAX refinement iterations = 0)"
 
-    # 3) refinement - stop if converged or #blocks decreased
+    # 3) refinement - stop if node-membership converged, number of blocks decreases, or log-likelihood decreases
     message = f"Max #iterations ({max_iter}) reached"
     for ref_iter in range(max_iter):
         if verbose:
             print("Refinement iteration #", ref_iter + 1)
         nodes_mem1 = nodes_mem_refinement_batch(nodes_mem0, events_dict_bp0, fit_param0, end_time, N_c0, LL_bp0)
 
-        # break if no change in node_membership after refinement iteration
+        # break if no change in node_membership after a refinement iteration
         if adjusted_rand_score(nodes_mem0, nodes_mem1) == 1:
             message = f"Break: node membership converged at iter# {ref_iter+1}"
             if verbose:
                 print(f"\t--> {message}")
             break
 
-        # break if number of classes decreased - nodes moving into the biggest block
+        # break if number of classes decreased (#unique_classes < K)
         classes_ref, n_node_per_class_ref = np.unique(nodes_mem1, return_counts=True)
         if len(classes_ref) < K:
             # print("nodes/class percentage : ", np.sort(n_node_per_class_ref / np.sum(n_node_per_class_ref)))
@@ -256,8 +297,8 @@ if __name__ == "__main__":
     mulch_fit.plot_adj(agg_adj, nodes_mem_true, K, "True membership")
 
     MAX_ITER = 15
-    model_fit_refine_kernel_sum_exact(events_dict, N, T_all, K, betas, n_alpha, MAX_ITER, nodes_mem_true=nodes_mem_true,
-                                      verbose=True)
+    fit_refinement_mulch(events_dict, N, T_all, K, betas, n_alpha, MAX_ITER, nodes_mem_true=nodes_mem_true,
+                         verbose=True)
 
 
 

@@ -71,7 +71,15 @@ def get_Ri_temp_Q(uv_events, e_intertimes_Q, xy_events, betas):
 
 
 def cal_diff_sums_Q(events_dict, end_time, betas):
-    Q = len(betas)
+    """
+    for each decay_q, calculate sum_ti {exp(- beta_q * (T - t_i))}
+
+    :param dict events_dict: keys are node pairs in the block pair & values are array of events between node pairs
+    :param float end_time: duration of the network
+    :param betas: (Q,) array of decays
+    :return: (Q,) array(float)
+    """
+    Q = len(betas) # number of decays
     T_diff_sums = np.zeros(Q, )
     if len(events_dict) == 0:
         return T_diff_sums
@@ -83,7 +91,14 @@ def cal_diff_sums_Q(events_dict, end_time, betas):
 
 #%% 6-alpha diagonal block pair log-likelihood and fit functions (sum of kernels)
 def cal_R_6_alpha_kernel_sum_dia(events_dict, betas):
-    # betas: array of fixed decays
+    """
+    calculate recursive term in log-likelihood function of one diagonal block pair (a, a)
+
+    :param events_dict: keys are node pairs in the block pair & values are array of events between node pairs
+    :param betas: (Q,) array of decays
+    :return: list size is events dictionary size
+    :rtype: list
+    """
     Q = len(betas)
     Ris = []
     for (u, v) in events_dict:
@@ -135,21 +150,34 @@ def cal_R_6_alpha_kernel_sum_dia(events_dict, betas):
     # return list of arrays - list size = #node_pairs_events_in block_pair
     return Ris
 
-def LL_6_alpha_kernel_sum_dia(params, events_dict, end_time, n_a, M, T_diff_sums=None, Ris=None):
-    # events_dict of node_pairs with events
+def LL_6_alpha_kernel_sum_dia(params, events_dict, end_time, n_a, m, T_diff_sums=None, Ris=None):
+    """
+    calculate log-likelihood of one diagonal block pair - 6 excitations - sum of kernels
+
+    :param tuple params: MULCH block pair parameters (mu, alphas, C, betas)
+    :param dict events_dict: keys are node pairs in the block pair & values are array of events between node pairs
+    :param float end_time: duration of the network
+    :param int n_a: number of nodes in block a
+    :param int m: number of node pairs in the diagonal block pair
+    :param T_diff_sums: Optional (Q,) array(float)
+    :param Ris: Optional list(size of events_dict)
+    :return: block pair log-likelihood
+    :rtype: float
+    """
+
     # C: scaling parameters - same length as betas
     mu, alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr, C, betas = params
     Q = len(betas)
-    ##first term
-    first = -M * mu * end_time
-    ### block pair has no events (empty)
+    # first term
+    first = -m * mu * end_time
+    # block pair has no events (empty)
     if len(events_dict) == 0:
         return first
-    ##second term
+    # second term
     if T_diff_sums is None:
         T_diff_sums = cal_diff_sums_Q(events_dict, end_time, betas)
     second = -(alpha_n + alpha_r + (alpha_br + alpha_gr + alpha_al + alpha_alr) * (n_a - 2)) * C @ T_diff_sums
-    ##third term
+    # third term
     if Ris is None:
         Ris = cal_R_6_alpha_kernel_sum_dia(events_dict, betas)
     third = 0
@@ -164,7 +192,25 @@ def LL_6_alpha_kernel_sum_dia(params, events_dict, end_time, n_a, M, T_diff_sums
     log_likelihood_value = first + second + third
     # print("ll: ", first, second, third)
     return log_likelihood_value
-def NLL_6_alpha_kernel_sum_dia(p, betas, events_dict, end_time, n_nodes, M, T_diff_sums, Ris):
+
+def NLL_6_alpha_kernel_sum_dia(p, betas, events_dict, end_time, n_a, m, T_diff_sums, Ris):
+    """
+    negative log-likelihood of one diagonal block pair- 6 excitations - sum of kernels
+
+    called by scipy.minimize() function for parameters estimation
+
+    :param tuple p: MULCH block pair raveled parameters (mu, alpha_1, .., alpha_6, C_1, .., C_Q )
+    :param betas: (Q,) array of decays
+    :param dict events_dict: keys are node pairs in the block pair & values are array of events between node pairs
+    :param float end_time: duration of the network
+    :param int n_a: number of nodes in block a
+    :param int m: number of node pairs in the diagonal block pair
+    :param T_diff_sums: Optional (Q,) array(float)
+    :param Ris: Optional list(size of events_dict)
+    :return: block pair negative log-likelihood
+    :rtype: float
+    """
+
     mu, alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr = p[:7]
     C = np.array(p[7:])
     # scaling step - constaint C sums to 1
@@ -178,8 +224,24 @@ def NLL_6_alpha_kernel_sum_dia(p, betas, events_dict, end_time, n_nodes, M, T_di
         alpha_al = alpha_al * C_sum
         alpha_alr = alpha_alr * C_sum
     params = mu, alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr, C, betas
-    return -LL_6_alpha_kernel_sum_dia(params, events_dict, end_time, n_nodes, M, T_diff_sums, Ris)
+    return -LL_6_alpha_kernel_sum_dia(params, events_dict, end_time, n_a, m, T_diff_sums, Ris)
 def NLL_6_alpha_kernel_sum_dia_jac(p, betas, events_dict, end_time, n_nodes, M, T_diff_sums, Ris):
+    """
+    jacobian of negative log-likelihood of one diagonal block pair- 6 excitations - sum of kernels
+
+    called by scipy.minimize() function for parameters estimation
+
+    :param tuple p: MULCH block pair parameters (mu, alpha_1, .., alpha_6, C_1, .., C_Q )
+    :param betas: (Q,) array of decays
+    :param dict events_dict: keys are node pairs in the block pair & values are array of events between node pairs
+    :param float end_time: duration of the network
+    :param int n_a: number of nodes in block a
+    :param int m: number of node pairs in the diagonal block pair
+    :param T_diff_sums: Optional (Q,) array(float)
+    :param Ris: Optional list(size of events_dict)
+    :return: jacobian array of negative log-likelihood function with respect to MULCH parameters
+    """
+
     mu, alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr = p[:7]
     C = np.array(p[7:])
     Q = len(C)
@@ -210,7 +272,19 @@ def NLL_6_alpha_kernel_sum_dia_jac(p, betas, events_dict, end_time, n_nodes, M, 
             d_C[q] -= np.sum(numerator_C[q] / denominator)
     return np.hstack((d_mu, d_alphas, d_C))
 
-def fit_6_alpha_kernel_sum_dia(events_dict, end_time, n_nodes, M, betas):
+def fit_6_alpha_kernel_sum_dia(events_dict, end_time, n_a, m, betas):
+    """
+    fit mulch one diagonal block pair- 6 excitations - sum of kernels
+
+    :param dict events_dict: keys are node pairs in the block pair & values are array of events between node pairs
+    :param float end_time: duration of the network
+    :param int n_a: number of nodes in block a
+    :param int m: number of node pairs in the diagonal block pair
+    :param betas: (Q,) array of decays
+    :return: estimated parameters (mu, alphas, C, betas)
+    :rtype: tuple
+    """
+
     Q = len(betas)
     # events_dict : (u,v):array_of_events
     if len(events_dict) == 0:  # handling empty block pair with no events
@@ -238,7 +312,7 @@ def fit_6_alpha_kernel_sum_dia(events_dict, end_time, n_nodes, M, betas):
     # minimize function
     # to print optimization details , options={'disp': True}
     res = minimize(NLL_6_alpha_kernel_sum_dia, init_param, method='L-BFGS-B', bounds=bounds, jac=NLL_6_alpha_kernel_sum_dia_jac,
-                   args=(betas, events_dict, end_time, n_nodes, M, T_diff_sums, Ris), tol=1e-12)
+                   args=(betas, events_dict, end_time, n_a, m, T_diff_sums, Ris), tol=1e-12)
     results = res.x
     # print("success ", res.success, ", status ", res.status, ", fun value ", res.fun)
     # print("message ", res.message)
@@ -260,7 +334,15 @@ def fit_6_alpha_kernel_sum_dia(events_dict, end_time, n_nodes, M, betas):
 
 #%% 6-alpha off-diagonal block pair log-likelihood and fit functions (sum of kernels)
 def cal_R_6_alpha_kernel_sum_off(events_dict, events_dict_r, betas):
-    # betas: array of fixed decays
+    """
+    calculate recursive term in log-likelihood function of one off-diagonal block pair (a, b)
+
+    :param events_dict: keys->node pairs in block pair (a, b) & values-> array of events between node pairs
+    :param events_dict_r: dictionary of events in reciprocal block pair (b, a)
+    :param betas: (Q,) array of decays
+    :return: list size = events dict size
+    :rtype: list
+    """
     Q = len(betas)
     Ris = []
     for (u, v) in events_dict:

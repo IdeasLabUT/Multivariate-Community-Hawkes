@@ -2,10 +2,10 @@
 import numpy as np
 import pickle
 
-import utils_fit_sum_betas_model as mulch_fit
+import utils_fit_model as mulch_fit
 from utils_generate_sum_betas_model import simulate_sum_kernel_model
-from refinement_alg import model_fit_refine_kernel_sum_exact
-from utils_sum_betas_bp import cal_num_events
+from utils_fit_refine_mulch import fit_refinement_mulch
+from utils_fit_bp import cal_num_events
 import matplotlib.pyplot as plt
 from sklearn.metrics import adjusted_rand_score
 
@@ -347,8 +347,8 @@ def refinement_accuracy(fixed_n=True, max_refine_iter = 10, n_run = 10, verbose=
                     print(f"\titer {it}: #simulated events={n_events_all}")
                 # agg_adj = mulch_fit.event_dict_to_aggregated_adjacency(N, events_dict)
                 # MBHP.plot_adj(agg_adj, nodes_mem_true, K, "True membership")
-                sp, ref, m = model_fit_refine_kernel_sum_exact(events_dict, N, T, K, betas, n_alpha, max_refine_iter,
-                                                               nodes_mem_true=nodes_mem_true, verbose=False)
+                sp, ref, m = fit_refinement_mulch(events_dict, N, T, K, betas, n_alpha, max_refine_iter,
+                                                  nodes_mem_true=nodes_mem_true, verbose=False)
                 ri_sp = adjusted_rand_score(nodes_mem_true, sp[0])
                 ri_ref = adjusted_rand_score(nodes_mem_true, ref[0])
                 if verbose:

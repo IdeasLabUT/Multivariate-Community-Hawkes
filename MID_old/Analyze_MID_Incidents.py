@@ -10,7 +10,7 @@ import pickle
 import matplotlib.pyplot as plt
 from generative_model_utils import event_dict_to_aggregated_adjacency, event_dict_to_adjacency
 from spectral_clustering import spectral_cluster
-from utils_fit_sum_betas_model import fit_kernel_sum_model, fit_n_r_br_gr_fixed_beta_model, print_paramters_kernel
+from utils_fit_model import fit_kernel_sum_model, fit_n_r_br_gr_fixed_beta_model, print_paramters_kernel
 
 n_classes = 6
 timestamp_max = 1000

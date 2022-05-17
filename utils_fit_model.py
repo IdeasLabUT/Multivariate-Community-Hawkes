@@ -1,38 +1,72 @@
+# TODO: add remove nodes not in train option
+# TODO: remove split train
+# TODO: rearrange functions - rename
+
 import numpy as np
+import pandas as pd
 from matplotlib import pyplot as plt
 from scipy.sparse.linalg import svds
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import normalize
 
-import utils_sum_betas_bp as sum_betas_bp
+import utils_fit_bp as sum_betas_bp
 
 
 #%% mulch (sum of kernel) log-likelihood functions
 
-def model_LL_kernel_sum(param, events_dict, node_mem, k, end_time, ref=False):
+def model_LL_kernel_sum(params, events_dict, node_mem, k, end_time, ref=False):
+    """
+    calculate full MULCH log-likelihood for all block pairs
+
+    :param tuple params: (mu_bp, alpha_1_bp, ..., alpha_n_bp, C, betas)
+        where mu_bp, alpha_i_bp are (K, K) arrays & C is (K, K, Q) array & betas is (Q,) array
+    :param dict events_dict: dataset formatted as a dictionary {(u, v) node pairs in network : [t1, t2, ...] array of
+        events between (u, v)}
+    :param node_mem: (n,) array(int) of nodes membership
+    :param int k: number of blocks
+    :param float end_time: network duration
+    :param ref: (optional) only set to True when called from fit_refinement_mulch() function
+    :return: model's log-likelihood and number of events in dataset
+    :rtype: (float, int)
+    """
     block_pair_M, n_nodes_c = num_nodes_pairs_per_block_pair(node_mem, k)
     events_dict_block_pair = events_dict_to_events_dict_bp(events_dict, node_mem, k)
-    if len(param) == 5:
-        return model_LL_2_alpha_kernel_sum(param, events_dict_block_pair, end_time, block_pair_M, n_nodes_c, k, ref)
-    elif len(param) == 7:
-        return model_LL_4_alpha_kernel_sum(param, events_dict_block_pair, end_time, block_pair_M, n_nodes_c, k, ref)
-    elif len(param) == 9:
-        return model_LL_6_alpha_kernel_sum(param, events_dict_block_pair, end_time, block_pair_M, n_nodes_c, k, ref)
+    # check which version of model, either 2, 4, or 6 types of excitations
+    if len(params) == 5:
+        return model_LL_2_alpha_kernel_sum(params, events_dict_block_pair, end_time, block_pair_M, n_nodes_c, k, ref)
+    elif len(params) == 7:
+        return model_LL_4_alpha_kernel_sum(params, events_dict_block_pair, end_time, block_pair_M, n_nodes_c, k, ref)
+    elif len(params) == 9:
+        return model_LL_6_alpha_kernel_sum(params, events_dict_block_pair, end_time, block_pair_M, n_nodes_c, k, ref)
 
 # different alpha-versions of sum of kernel model
-def model_LL_2_alpha_kernel_sum(params_tup, events_dict_bp, end_time, M_bp, n_nodes_c, n_classes, ref=False):
-    mu_bp, alpha_n_bp, alpha_r_bp, C_bp, betas = params_tup
-    LL_bp = np.zeros((n_classes, n_classes))
+def model_LL_2_alpha_kernel_sum(params, events_dict_bp, end_time, m_bp, n_K, K, ref=False):
+    """
+    calculate full MULCH log-likelihood for 2-alphas model version
+
+    :param tuple params: (mu_bp, alpha_1_bp, ..., alpha_n_bp, C, betas)
+        where mu_bp, alpha_i_bp are (K, K) arrays & C is (K, K, Q) array & betas is (Q,) array
+    :param events_dict_bp: KxK list, each element events_dict[a][b] is events_dict of the block pair (a, b)
+    :param float end_time: network duration
+    :param m_bp: (K, K) array number of node pairs per block pair
+    :param n_K: (K,) array number of nodes per block
+    :param int K: number of blocks
+    :param ref: (optional) only set to True when called from fit_refinement_mulch() function
+    :return: model's log-likelihood and number of events in dataset
+    :rtype: (float, int)
+    """
+    mu_bp, alpha_n_bp, alpha_r_bp, C_bp, betas = params
+    LL_bp = np.zeros((K, K))
     num_events = 0
-    for i in range(n_classes):
-        for j in range(n_classes):
+    for i in range(K):
+        for j in range(K):
             par = (mu_bp[i, j], alpha_n_bp[i, j], alpha_r_bp[i, j], C_bp[i, j, :], betas)
             if i == j:  # diagonal block pair
-                ll_dia = sum_betas_bp.LL_2_alpha_kernel_sum_dia(par, events_dict_bp[i][j], end_time, n_nodes_c[j, 0], M_bp[i, j])
+                ll_dia = sum_betas_bp.LL_2_alpha_kernel_sum_dia(par, events_dict_bp[i][j], end_time, n_K[j, 0], m_bp[i, j])
                 LL_bp[i, j] = ll_dia
             else:  # off-diagonal block pair
                 ll_off = sum_betas_bp.LL_2_alpha_kernel_sum_off(par, events_dict_bp[i][j], events_dict_bp[j][i], end_time,
-                                                               n_nodes_c[j, 0], M_bp[i, j])
+                                                                n_K[j, 0], m_bp[i, j])
                 LL_bp[i, j] = ll_off
             # number of event of block_pair
             num_events += sum_betas_bp.cal_num_events(events_dict_bp[i][j])
@@ -40,20 +74,34 @@ def model_LL_2_alpha_kernel_sum(params_tup, events_dict_bp, end_time, M_bp, n_no
         return LL_bp, num_events
     else:
         return np.sum(LL_bp), num_events
-def model_LL_4_alpha_kernel_sum(params_tup, events_dict_bp, end_time, M_bp, n_nodes_c, n_classes, ref=False):
-    mu_bp, alpha_n_bp, alpha_r_bp, alpha_br_bp, alpha_gr_bp, C_bp, betas = params_tup
-    LL_bp = np.zeros((n_classes, n_classes))
+def model_LL_4_alpha_kernel_sum(params, events_dict_bp, end_time, m_bp, n_K, K, ref=False):
+    """
+    calculate full MULCH log-likelihood for 4-alphas model version
+
+    :param tuple params: (mu_bp, alpha_1_bp, ..., alpha_n_bp, C, betas)
+        where mu_bp, alpha_i_bp are (K, K) arrays & C is (K, K, Q) array & betas is (Q,) array
+    :param events_dict_bp: KxK list, each element events_dict[a][b] is events_dict of the block pair (a, b)
+    :param float end_time: network duration
+    :param m_bp: (K, K) array number of node pairs per block pair
+    :param n_K: (K,) array number of nodes per block
+    :param int K: number of blocks
+    :param ref: (optional) only set to True when called from fit_refinement_mulch() function
+    :return: model's log-likelihood and number of events in dataset
+    :rtype: (float, int)
+    """
+    mu_bp, alpha_n_bp, alpha_r_bp, alpha_br_bp, alpha_gr_bp, C_bp, betas = params
+    LL_bp = np.zeros((K, K))
     num_events = 0
-    for i in range(n_classes):
-        for j in range(n_classes):
+    for i in range(K):
+        for j in range(K):
             par = (mu_bp[i, j], alpha_n_bp[i, j], alpha_r_bp[i, j], alpha_br_bp[i, j], alpha_gr_bp[i, j],
                    C_bp[i, j],betas)
             if i == j:  # diagonal block pair
-                ll_dia = sum_betas_bp.LL_4_alpha_kernel_sum_dia(par, events_dict_bp[i][j], end_time, n_nodes_c[j, 0], M_bp[i, j])
+                ll_dia = sum_betas_bp.LL_4_alpha_kernel_sum_dia(par, events_dict_bp[i][j], end_time, n_K[j, 0], m_bp[i, j])
                 LL_bp[i, j] = ll_dia
             else:  # off-diagonal block pair
                 ll_off = sum_betas_bp.LL_4_alpha_kernel_sum_off(par, events_dict_bp[i][j], events_dict_bp[j][i], end_time,
-                                                               n_nodes_c[j, 0], M_bp[i, j])
+                                                                n_K[j, 0], m_bp[i, j])
                 LL_bp[i, j] = ll_off
             # number of event of block_pair
             num_events += sum_betas_bp.cal_num_events(events_dict_bp[i][j])
@@ -61,20 +109,34 @@ def model_LL_4_alpha_kernel_sum(params_tup, events_dict_bp, end_time, M_bp, n_no
         return LL_bp, num_events
     else:
         return np.sum(LL_bp), num_events
-def model_LL_6_alpha_kernel_sum(params_tup, events_dict_bp, end_time, M_bp, n_nodes_c, n_classes, ref=False):
-    mu_bp, alpha_n_bp, alpha_r_bp, alpha_br_bp, alpha_gr_bp, alpha_al_bp, alpha_alr_bp, C_bp, betas = params_tup
-    LL_bp = np.zeros((n_classes, n_classes))
+def model_LL_6_alpha_kernel_sum(params, events_dict_bp, end_time, m_bp, n_K, K, ref=False):
+    """
+    calculate full MULCH log-likelihood for 6-alphas model version
+
+    :param tuple params: (mu_bp, alpha_1_bp, ..., alpha_n_bp, C, betas)
+        where mu_bp, alpha_i_bp are (K, K) arrays & C is (K, K, Q) array & betas is (Q,) array
+    :param events_dict_bp: KxK list, each element events_dict[a][b] is events_dict of the block pair (a, b)
+    :param float end_time: network duration
+    :param m_bp: (K, K) array number of node pairs per block pair
+    :param n_K: (K,) array number of nodes per block
+    :param int K: number of blocks
+    :param ref: (optional) only set to True when called from fit_refinement_mulch() function
+    :return: model's log-likelihood and number of events in dataset
+    :rtype: (float, int)
+    """
+    mu_bp, alpha_n_bp, alpha_r_bp, alpha_br_bp, alpha_gr_bp, alpha_al_bp, alpha_alr_bp, C_bp, betas = params
+    LL_bp = np.zeros((K, K))
     num_events = 0
-    for i in range(n_classes):
-        for j in range(n_classes):
+    for i in range(K):
+        for j in range(K):
             par = (mu_bp[i, j], alpha_n_bp[i, j], alpha_r_bp[i, j], alpha_br_bp[i, j], alpha_gr_bp[i, j],
                    alpha_al_bp[i, j], alpha_alr_bp[i, j], C_bp[i, j], betas)
             if i == j:  # diagonal block pair
-                ll_dia = sum_betas_bp.LL_6_alpha_kernel_sum_dia(par, events_dict_bp[i][j], end_time, n_nodes_c[j, 0], M_bp[i, j])
+                ll_dia = sum_betas_bp.LL_6_alpha_kernel_sum_dia(par, events_dict_bp[i][j], end_time, n_K[j, 0], m_bp[i, j])
                 LL_bp[i, j] = ll_dia
             else:  # off-diagonal block pair
                 ll_off = sum_betas_bp.LL_6_alpha_kernel_sum_off(par, events_dict_bp[i][j], events_dict_bp[j][i], end_time,
-                                                               n_nodes_c[j, 0], M_bp[i, j])
+                                                                n_K[j, 0], m_bp[i, j])
                 LL_bp[i, j] = ll_off
             # number of event of block_pair
             num_events += sum_betas_bp.cal_num_events(events_dict_bp[i][j])
@@ -85,28 +147,54 @@ def model_LL_6_alpha_kernel_sum(params_tup, events_dict_bp, end_time, M_bp, n_no
 
 
 #%% MULCH (sum of kernel) full model fit functions
-def model_fit_kernel_sum(n_alpha, events_dict, node_mem, n_classes, end_time, betas, ref=False):
+def model_fit_kernel_sum(n_alpha, events_dict, node_mem, K, end_time, betas, ref=False):
+    """
+    estimate MULCH's parameters given nodes membership
+
+    :param int n_alpha: number of excitation types. Choose between 2, 4, or 6
+    :param dataset events_dict: dataset formatted as a dictionary {(u, v) node pairs in network : [t1, t2, ...] array of
+        events between (u, v)}
+    :param node_mem: nodes membership
+    :param K: number of blocks
+    :param end_time: network duration
+    :param betas: (Q,) array of decays
+    :param ref: (optional) only set to True when called from fit_refinement_mulch() function
+    :return: mulch_parameters, log-likelihood, #events. if ref=True, also return events_dict_bp, n_K
+    """
+    # check which version of model, either 2, 4, or 6 types of excitations
     if n_alpha == 2:
-        return fit_2_alpha_kernel_sum(events_dict, node_mem, n_classes, end_time, betas, ref)
+        return fit_2_alpha_kernel_sum(events_dict, node_mem, K, end_time, betas, ref)
     elif n_alpha == 4:
-        return fit_4_alpha_kernel_sum(events_dict, node_mem, n_classes, end_time, betas, ref)
+        return fit_4_alpha_kernel_sum(events_dict, node_mem, K, end_time, betas, ref)
     elif n_alpha == 6:
-        return fit_6_alpha_kernel_sum(events_dict, node_mem, n_classes, end_time, betas, ref)
+        return fit_6_alpha_kernel_sum(events_dict, node_mem, K, end_time, betas, ref)
     else:
         print(" number of alpha parameter should be 2, 4, or 6")
 
 # different alpha-versions of sum of kernel model
-def fit_2_alpha_kernel_sum(events_dict, node_mem, n_classes, end_time, betas, ref=False):
+def fit_2_alpha_kernel_sum(events_dict, node_mem, K, end_time, betas, ref=False):
+    """
+    estimate MULCH's parameters given nodes membership (2-alphas model)
+
+    :param dataset events_dict: dataset formatted as a dictionary {(u, v) node pairs in network : [t1, t2, ...] array of
+        events between (u, v)}
+    :param node_mem: nodes membership
+    :param K: number of blocks
+    :param end_time: network duration
+    :param betas: (Q,) array of decays
+    :param ref: (optional) only set to True when called from fit_refinement_mulch() function
+    :return: mulch_parameters, log-likelihood, #events. if ref=True, also return events_dict_bp, n_K
+    """
     # return number of node pairs within a block pair, number of nodes per class
-    block_pair_M_train, n_nodes_c = num_nodes_pairs_per_block_pair(node_mem, n_classes)
-    block_pairs_train = events_dict_to_events_dict_bp(events_dict, node_mem, n_classes)
-    # initialize paramters matrices
-    mu_bp = np.zeros((n_classes, n_classes))
-    alpha_n_bp = np.zeros((n_classes, n_classes))
-    alpha_r_bp = np.zeros((n_classes,n_classes))
-    C_bp = np.zeros((n_classes, n_classes, np.size(betas)))
-    for i in range(n_classes):
-        for j in range(n_classes):
+    block_pair_M_train, n_nodes_c = num_nodes_pairs_per_block_pair(node_mem, K)
+    block_pairs_train = events_dict_to_events_dict_bp(events_dict, node_mem, K)
+    # initialize parameters matrices
+    mu_bp = np.zeros((K, K))
+    alpha_n_bp = np.zeros((K, K))
+    alpha_r_bp = np.zeros((K, K))
+    C_bp = np.zeros((K, K, np.size(betas)))
+    for i in range(K):
+        for j in range(K):
             if i == j:  # diagonal block pair
                 params_est = sum_betas_bp.fit_2_alpha_kernel_sum_dia(block_pairs_train[i][j], end_time, n_nodes_c[j, 0],
                                                                     block_pair_M_train[i, j], betas)
@@ -120,24 +208,36 @@ def fit_2_alpha_kernel_sum(events_dict, node_mem, n_classes, end_time, betas, re
     # calclate log-likelihood on train, test, all datasets
     params_tuple = (mu_bp, alpha_n_bp, alpha_r_bp, C_bp, betas)
     ll_train, num_events_train = model_LL_2_alpha_kernel_sum(params_tuple, block_pairs_train, end_time,
-                                                                  block_pair_M_train, n_nodes_c, n_classes, ref)
+                                                             block_pair_M_train, n_nodes_c, K, ref)
     if ref:
         return params_tuple, ll_train, num_events_train, block_pairs_train, n_nodes_c
     else:
         return params_tuple, ll_train, num_events_train
-def fit_4_alpha_kernel_sum(events_dict, node_mem, n_classes, end_time, betas, ref=False):
+def fit_4_alpha_kernel_sum(events_dict, node_mem, K, end_time, betas, ref=False):
+    """
+    estimate MULCH's parameters given nodes membership (4-alphas model)
+
+    :param dataset events_dict: dataset formatted as a dictionary {(u, v) node pairs in network : [t1, t2, ...] array of
+        events between (u, v)}
+    :param node_mem: nodes membership
+    :param K: number of blocks
+    :param end_time: network duration
+    :param betas: (Q,) array of decays
+    :param ref: (optional) only set to True when called from fit_refinement_mulch() function
+    :return: mulch_parameters, log-likelihood, #events. if ref=True, also return events_dict_bp, n_K
+    """
     # return number of node pairs within a block pair, number of nodes per class
-    block_pair_M_train, n_nodes_c = num_nodes_pairs_per_block_pair(node_mem, n_classes)
-    block_pairs_train = events_dict_to_events_dict_bp(events_dict, node_mem, n_classes)
+    block_pair_M_train, n_nodes_c = num_nodes_pairs_per_block_pair(node_mem, K)
+    block_pairs_train = events_dict_to_events_dict_bp(events_dict, node_mem, K)
     # initialize paramters matrices
-    mu_bp = np.zeros((n_classes, n_classes))
-    alpha_n_bp = np.zeros((n_classes, n_classes))
-    alpha_r_bp = np.zeros((n_classes,n_classes))
-    alpha_br_bp = np.zeros((n_classes, n_classes))
-    alpha_gr_bp = np.zeros((n_classes, n_classes))
-    C_bp = np.zeros((n_classes, n_classes, np.size(betas)))
-    for i in range(n_classes):
-        for j in range(n_classes):
+    mu_bp = np.zeros((K, K))
+    alpha_n_bp = np.zeros((K, K))
+    alpha_r_bp = np.zeros((K, K))
+    alpha_br_bp = np.zeros((K, K))
+    alpha_gr_bp = np.zeros((K, K))
+    C_bp = np.zeros((K, K, np.size(betas)))
+    for i in range(K):
+        for j in range(K):
             if i == j:  # diagonal block pair
                 params_est = sum_betas_bp.fit_4_alpha_kernel_sum_dia(block_pairs_train[i][j], end_time, n_nodes_c[j, 0],
                                                                     block_pair_M_train[i, j], betas)
@@ -153,12 +253,24 @@ def fit_4_alpha_kernel_sum(events_dict, node_mem, n_classes, end_time, betas, re
     # calclate log-likelihood on train, test, all datasets
     params_tuple = (mu_bp, alpha_n_bp, alpha_r_bp, alpha_br_bp, alpha_gr_bp, C_bp, betas)
     ll_train, num_events_train = model_LL_4_alpha_kernel_sum(params_tuple, block_pairs_train, end_time,
-                                                                  block_pair_M_train, n_nodes_c, n_classes, ref)
+                                                             block_pair_M_train, n_nodes_c, K, ref)
     if ref:
         return params_tuple, ll_train, num_events_train, block_pairs_train, n_nodes_c
     else:
         return params_tuple, ll_train, num_events_train
 def fit_6_alpha_kernel_sum(events_dict, node_mem, n_classes, end_time, betas, ref=False):
+    """
+    estimate MULCH's parameters given nodes membership (6-alphas model)
+
+    :param dataset events_dict: dataset formatted as a dictionary {(u, v) node pairs in network : [t1, t2, ...] array of
+        events between (u, v)}
+    :param node_mem: nodes membership
+    :param K: number of blocks
+    :param end_time: network duration
+    :param betas: (Q,) array of decays
+    :param ref: (optional) only set to True when called from fit_refinement_mulch() function
+    :return: mulch_parameters, log-likelihood, #events. if ref=True, also return events_dict_bp, n_K
+    """
     # return number of node pairs within a block pair, number of nodes per class
     block_pair_M_train, n_nodes_c = num_nodes_pairs_per_block_pair(node_mem, n_classes)
     block_pairs_train = events_dict_to_events_dict_bp(events_dict, node_mem, n_classes)
@@ -208,6 +320,7 @@ def spectral_cluster1(adj, num_classes=2, n_kmeans_init=100, normalize_z=True, m
     :param num_classes: number of classes for spectral clustering
     :param n_kmeans_init: number of initializations for k-means
     :param normalize_z: If True, vector z is normalized to sum to 1
+    :param multiply_s: if true, multiply both u and v by sqrt(s)
     :param verbose: if True, prints the eigenvalues
     :param plot_eigenvalues: if True, plots the first `num_classes` singular values
     :param plot_save_path: directory to save the plot
@@ -261,6 +374,9 @@ def spectral_cluster1(adj, num_classes=2, n_kmeans_init=100, normalize_z=True, m
 #%% model fitting helper function
 
 def plot_adj(agg_adj, node_mem, K, s=""):
+    """
+    plot adjacency matrix permuted by nodes membership
+    """
     nodes_per_class, n_class = [], []
     N = len(node_mem)
     for k in range(K):
@@ -280,72 +396,55 @@ def plot_adj(agg_adj, node_mem, K, s=""):
     plt.title("permuted count matrix "+ s)
     plt.show()
 
-def print_model_param_single_beta(params_est):
-    print("mu")
-    print(params_est[0])
-    print("\nalpha_n")
-    print(params_est[1])
-    print("\nalpha_r")
-    print(params_est[2])
-    if len(params_est)==4:
-        print("\nbeta")
-        print(params_est[3])
-    else:
-        print("\nalpha_br")
-        print(params_est[3])
-        print("\nalpha_gr")
-        print(params_est[4])
-        if len(params_est)==6:
-            print("\nbeta")
-            print(params_est[5])
-        else:
-            print("\nalpha_al")
-            print(params_est[5])
-            print("\nalpha_alr")
-            print(params_est[6])
-            print("\nbeta")
-            print(params_est[7])
 
-def print_model_param_kernel_sum(params_est):
+def print_model_param_kernel_sum(params):
+    """
+    print MULCH model estimated parameters
+
+    :param params: (mu_bp, alpha_1_bp, ..., alpha_n_bp, C, betas)
+        where mu_bp, alpha_i_bp are (K, K) arrays & C is (K, K, Q) array & betas is (Q,) array
+    """
     print("mu")
-    print(params_est[0])
+    print(params[0])
     print("\nalpha_n")
-    print(params_est[1])
+    print(params[1])
     print("\nalpha_r")
-    print(params_est[2])
-    classes = np.shape(params_est[0])[0]
-    if len(params_est) == 5:
+    print(params[2])
+    classes = np.shape(params[0])[0]
+    if len(params) == 5:
         print("\nC")
         for i in range(classes):
             for j in range(classes):
-                print(params_est[3][i, j, :], end='\t')
+                print(params[3][i, j, :], end='\t')
             print(" ")
     else:
         print("\nalpha_br")
-        print(params_est[3])
+        print(params[3])
         print("\nalpha_gr")
-        print(params_est[4])
-        if len(params_est) == 7:
+        print(params[4])
+        if len(params) == 7:
             print("\nC")
             for i in range(classes):
                 for j in range(classes):
-                    print(params_est[5][i, j, :], end='\t')
+                    print(params[5][i, j, :], end='\t')
                 print(" ")
-        elif len(params_est) == 9:
+        elif len(params) == 9:
             print("\nalpha_al")
-            print(params_est[5])
+            print(params[5])
             print("\nalpha_alr")
-            print(params_est[6])
+            print(params[6])
             print("\nC")
             for i in range(classes):
                 for j in range(classes):
-                    print(params_est[7][i, j, :], end='\t')
+                    print(params[7][i, j, :], end='\t')
                 print(" ")
 
 def assign_node_membership_for_missing_nodes(node_membership, missing_nodes):
     """
     Assigns the missing nodes to the largest community
+
     @author: Makan Arastuie
+
     :param node_membership: (list) membership of every node (except missing ones) to one of K classes
     :param missing_nodes: (list) nodes to be assigned a community
 
@@ -362,19 +461,31 @@ def assign_node_membership_for_missing_nodes(node_membership, missing_nodes):
 
     return combined_node_membership
 
-def events_dict_to_events_dict_bp(events_dict, node_mem, n_classes):
-    # each block_pair is a dict of events
-    block_pair_events_dict = [[None]*n_classes for _ in range(n_classes)]
-    for i in range(n_classes):
-        for j in range(n_classes):
+def events_dict_to_events_dict_bp(events_dict, node_mem, K):
+    """
+    split events_dict into KxK part. Each part has only events within a block pair
+
+    the function computes events_dict_bp a (kxK) list, each element events_dict_bp[a][b] is events_dict of the
+    block_pair (a, b) i.e. a key (u, v) in events_dict_bp[a][b] means u in block(a) and v in block(b)
+
+    :param events_dict: dataset formatted as a dictionary {(u, v) node pairs in network : [t1, t2, ...] array of
+        events between (u, v)}
+    :param node_mem: (n,) array(int) nodes membership
+    :param int K: number of blocks
+    :return: events_dict_bp is (kxK) list, each element events_dict_bp[a][b] is events_dict of the block pair (a, b)
+    """
+    block_pair_events_dict = [[None] * K for _ in range(K)]
+    for i in range(K):
+        for j in range(K):
             block_pair_events_dict[i][j] = {}
     for u, v in events_dict:
         block_pair_events_dict[node_mem[u]][node_mem[v]][(u,v)] = np.array(events_dict[u,v])
     return block_pair_events_dict
 
-def num_nodes_pairs_per_block_pair(node_mem, n_classes):
+def num_nodes_pairs_per_block_pair(node_mem, K):
+    """ return (K, K) array of #node_pairs in each block_pair (a, b), (K,) array #nodes per block"""
     classes, n_node_per_class = np.unique(node_mem, return_counts=True)
-    n_node_per_class = n_node_per_class.reshape((n_classes, 1))
+    n_node_per_class = n_node_per_class.reshape((K, 1))
     return (np.matmul(n_node_per_class, n_node_per_class.T)- np.diagflat(n_node_per_class), n_node_per_class)
 
 def split_train(events_dict, split_ratio=0.8):
@@ -392,6 +503,12 @@ def split_train(events_dict, split_ratio=0.8):
     return events_dict_t, split_time
 
 def get_node_id_maps(node_set):
+    """
+    map each node to a unique id between [0 : #nodes-1]
+
+    :param node_set: set of unique nodes in the network (could be string or number
+    :return: dict(node:id) map, dict(id:node) map
+    """
     nodes = list(node_set)
     nodes.sort()
     node_id_map = {}
@@ -401,57 +518,80 @@ def get_node_id_maps(node_set):
         id_node_map[i] = n
     return node_id_map, id_node_map
 
-def read_cvs_split_train(data_file_name, split_ratio=0.8, timestamp_max=1000):
-    data = np.loadtxt(data_file_name, np.float)
+def read_csv_split_train(data_file_name, delimiter, remove_not_train=False, split_ratio=0.8, timestamp_max=1000):
+    """
+    read network csv (or txt) file and return train and full dataset
+
+    file is assumed to have 3 columns [sender node, receiver node, timestamp] with no header
+
+    :param str data_file_name: csv file path
+    :param str delimiter: delimiter to use for reading file
+    :param float split_ratio: (optional) train:test ratio, choose between [0, 1]. Default=0.8
+    :param remove_not_train: (optional) if True, remove nodes (and corresponding events) that appeared in test set but
+        not in train.
+    :param timestamp_max: (optional) scale network's timestamps between [0, timestamp_max].
+        Default=1000 (used in all MULCH dataset experiments)
+    :return: train_tuple, full_tuple, nodes_not_in_train.
+        Both train and full dataset tuple=(events_dict, number_nodes, duration, end_time, number_events),
+        where events_dict is the dataset format passed to MULCH fit function (see fit_refinement_mulch()).
+        nodes_not_in_train is list of nodes appeared in test dataset, but not in train
+    :rtype: (tuple, tuple, list)
+    """
+    data_df = pd.read_csv(data_file_name, sep=delimiter, header=None, usecols=[0,1,2])
 
     # sort data by timestamp and adjust timestamps to start from 0
-    data = data[data[:, 2].argsort()]
-    data[:, 2] = data[:, 2] - data[0, 2]
+    data_df.sort_values(by=2)
+    data_df.iloc[:, 2] = data_df.iloc[:, 2] - data_df.iloc[0, 2]
 
     # scale timestamps to 0 to timestamp_max
     if timestamp_max is not None:
-        data[:, 2] = (data[:, 2] - min(data[:, 2])) / (max(data[:, 2])- min(data[:, 2])) * timestamp_max
+        data_df.iloc[:, 2] = data_df.iloc[:, 2] * timestamp_max / (data_df.iloc[-1, 2] - data_df.iloc[0, 2])
 
-    end_time_all = data[-1, 2]
-    node_set_all = set(data[:, 0].astype(np.int)).union(data[:, 1].astype(np.int))
+    end_time_all = data_df.iloc[-1, 2]
+    node_set_all = set(data_df[0].unique()).union(data_df[1].unique())
+    # unique set of all nodes in network
     n_nodes_all = len(node_set_all)
+    # map each node to a unique id between [0 : #nodes -1]
     node_id_map_all, id_node_map_all = get_node_id_maps(node_set_all)
 
-    train_split_point = int(len(data) * split_ratio)    # point not included in train
-    end_time_train = data[train_split_point - 1, 2]
-    node_set_train = set(data[:train_split_point, 0].astype(np.int)).union(data[:train_split_point, 1].astype(np.int))
+    train_split_point = int(len(data_df) * split_ratio)    # point not included in train
+    end_time_train = data_df.iloc[train_split_point - 1, 2]
+    # unique set of nodes in train dataset
+    node_set_train = set(data_df.iloc[:train_split_point, 0].unique()).union(data_df.iloc[:train_split_point, 1].unique())
     n_nodes_train = len(node_set_train)
     node_id_map_train, id_node_map_train = get_node_id_maps(node_set_train)
 
     events_dict_all = {}
     events_dict_train = {}
     for i in range(train_split_point):
-        u_all = node_id_map_all[np.int(data[i, 0])]
-        v_all = node_id_map_all[np.int(data[i, 1])]
-        u_train = node_id_map_train[np.int(data[i, 0])]
-        v_train = node_id_map_train[np.int(data[i, 1])]
+        u_all = node_id_map_all[data_df.iloc[i, 0]]
+        v_all = node_id_map_all[data_df.iloc[i, 1]]
+        u_train = node_id_map_train[data_df.iloc[i, 0]]
+        v_train = node_id_map_train[data_df.iloc[i, 1]]
         if (u_all, v_all) not in events_dict_all:
             events_dict_all[(u_all, v_all)] = []
             events_dict_train[(u_train, v_train)] = []
-        events_dict_all[(u_all, v_all)].append(data[i, 2])
-        events_dict_train[(u_train, v_train)].append(data[i, 2])
-    for i in range(train_split_point, len(data)):
-        u_all = node_id_map_all[np.int(data[i, 0])]
-        v_all = node_id_map_all[np.int(data[i, 1])]
+        events_dict_all[(u_all, v_all)].append(data_df.iloc[i, 2])
+        events_dict_train[(u_train, v_train)].append(data_df.iloc[i, 2])
+    for i in range(train_split_point, len(data_df)):
+        u_all = node_id_map_all[data_df.iloc[i, 0]]
+        v_all = node_id_map_all[data_df.iloc[i, 1]]
         if (u_all, v_all) not in events_dict_all:
             events_dict_all[(u_all, v_all)] = []
-        events_dict_all[(u_all, v_all)].append(data[i, 2])
+        events_dict_all[(u_all, v_all)].append(data_df.iloc[i, 2])
 
-    # node not in train list
+    n_events_train = len(data_df.iloc[:train_split_point, 0])
+    n_events_all = len(data_df)
+    # nodes not in train list
     nodes_not_in_train = []
     for n in (node_set_all - node_set_train):
         nodes_not_in_train.append(node_id_map_all[n])
 
-    train_tuple = events_dict_train, n_nodes_train, end_time_train
-    all_tuple = events_dict_all, n_nodes_all, end_time_all
+    train_tuple = events_dict_train, n_nodes_train, end_time_train, n_events_train, id_node_map_train
+    all_tuple = events_dict_all, n_nodes_all, end_time_all, n_events_all, id_node_map_all
     return train_tuple, all_tuple, nodes_not_in_train
-
 def event_dict_to_aggregated_adjacency(num_nodes, event_dicts, dtype=np.float):
+    """ return (n,n) network aggregated adjacency matrix """
     adjacency_matrix = np.zeros((num_nodes, num_nodes), dtype=dtype)
 
     for (u, v), event_times in event_dicts.items():
@@ -460,6 +600,7 @@ def event_dict_to_aggregated_adjacency(num_nodes, event_dicts, dtype=np.float):
     return adjacency_matrix
 
 def event_dict_to_adjacency(num_nodes, event_dicts, dtype=np.float):
+    """ return (n,n) network adjacency matrix """
     adjacency_matrix = np.zeros((num_nodes, num_nodes), dtype=dtype)
 
     for (u, v), event_times in event_dicts.items():
