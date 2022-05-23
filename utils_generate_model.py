@@ -1,12 +1,30 @@
+""" helper functions for generating networks from MULCH model
+
+Reference: MULCH simulation class MHP_Kernels.py is adapted from
+hawkes GitHub repository by Steven Morse https://github.com/stmorse/hawkes
+
+
+@author: Hadeel Soliman"""
 import random
 import numpy as np
 from hawkes.MHP_Kernels import MHP_Kernels_2
 
-""" parameters in matrix format for simulation and detailed function"""
 
+#%% simulation functions
 
-#%% mulch sum of kernel simulation function
-def simulate_sum_kernel_model(sim_param, n_nodes, n_classes, p, duration):
+def simulate_mulch(sim_param, n_nodes, n_classes, p, duration):
+    """
+    simulate networks from MULCH
+
+    :param tuple sim_param: MULCH parameters (mu_bp, alphas_1_bp, .., alpha_n_bp, C_bp, betas )
+    :param n_nodes: number nodes in network (n)
+    :param n_classes: number of blocks
+    :param p: (K,) array of class membership probabilities (should sum to one) - ex: np.array([0.1, 0.4, 0.5])
+    :param duration: network duration (T)
+    :return: tuple of (events_dict, nodes_membership). (events_dict): dataset formatted as a dictionary
+        {(u, v) node pairs in network : [t1, t2, ...] array of events between (u, v)}.
+        (nodes_membership): (n,) array of block membership of each node.
+    """
     if len(sim_param) == 5:
         mu_sim, alpha_n_sim, alpha_r_sim, C_sim, betas_sim = sim_param
     elif len(sim_param) == 7:
@@ -35,7 +53,7 @@ def simulate_sum_kernel_model(sim_param, n_nodes, n_classes, p, duration):
                     elif len(sim_param) == 9:
                         par = (mu_sim[i, j], alpha_n_sim[i, j], alpha_r_sim[i, j], alpha_br_sim[i, j], alpha_gr_sim[i, j],
                            alpha_al_sim[i, j], alpha_alr_sim[i, j], np.array(C_sim[i, j]), betas_sim)
-                    events_dict = simulate_sum_betas_dia_bp(par, list(class_nodes_list[i]), duration)
+                    events_dict = simulate_dia_bp(par, list(class_nodes_list[i]), duration)
                     events_dict_all.update(events_dict)
             elif i < j:
                 if len(sim_param) == 5:
@@ -51,29 +69,31 @@ def simulate_sum_kernel_model(sim_param, n_nodes, n_classes, p, duration):
                               alpha_al_sim[i, j], alpha_alr_sim[i, j], np.array(C_sim[i, j]), betas_sim)
                     par_ba = (mu_sim[j, i], alpha_n_sim[j, i], alpha_r_sim[j, i], alpha_br_sim[j, i], alpha_gr_sim[j, i],
                               alpha_al_sim[j, i], alpha_alr_sim[j, i], np.array(C_sim[j, i]) ,betas_sim)
-                d_ab, d_ba = simulate_sum_betas_off_bp(par_ab, par_ba, list(class_nodes_list[i]), list(class_nodes_list[j]),
-                                                                 duration)
+                d_ab, d_ba = simulate_off_bp(par_ab, par_ba, list(class_nodes_list[i]), list(class_nodes_list[j]),
+                                             duration)
                 events_dict_all.update(d_ab)
                 events_dict_all.update(d_ba)
     return events_dict_all, node_mem_actual
-#%% sum of betas block pair simulation functions (diagonal & off-diagonal)
 
-def simulate_sum_betas_dia_bp(par, a_nodes, end_time, return_list=False):
-    # kernel: alpha*beta*exp(-beta*t)
-    if len(par) == 5:
-        mu, alpha_n, alpha_r, C, betas = par
-        alphas = alpha_n, alpha_r
-        mu_array, alpha_matrix = get_mu_array_alpha_matrix_dia_bp(mu, alphas, len(a_nodes))
-    elif len(par) == 7:
-        mu, alpha_n, alpha_r, alpha_br, alpha_gr, C, betas = par
-        alphas = alpha_n, alpha_r, alpha_br, alpha_gr
-        mu_array, alpha_matrix= get_mu_array_alpha_matrix_dia_bp(mu, alphas, len(a_nodes))
-    else:
-        mu, alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr, C, betas = par
-        alphas = alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr
-        mu_array, alpha_matrix = get_mu_array_alpha_matrix_dia_bp(mu, alphas, len(a_nodes))
-    P = MHP_Kernels_2(mu=mu_array, alpha=alpha_matrix, C=C, betas=betas)
-    P.generate_seq(end_time)
+
+def simulate_dia_bp(par, a_nodes, duration, return_list=False):
+    """
+    simulate one MULCH diagonal block pair (a, b) (i.e. a=b)
+
+    :param tuple par: block pair parameters (mu, alphas_1, .., alpha_n, C, betas)
+    :param a_nodes: array of ids of nodes in block (a).
+    :param duration: network's duration (T)
+    :param return_list: only used for additional functionality checking
+    :return: events_dict: events in block pair (a, b) formatted as a dictionary
+        {(u, v) node pairs in (a, b) : [t1, t2, ...] array of events between (u, v)}.
+    """
+
+    # get (m, m) excitation matrix, m is # of node pair per block pair
+    n_alpha = len(par) - 3  # number of types of excitations
+    # pass mu, alphas parameters
+    mu_array, alpha_matrix = get_mu_array_alpha_matrix_dia_bp(par[0], par[1: n_alpha + 1], len(a_nodes))
+    P = MHP_Kernels_2(mu=mu_array, alpha=alpha_matrix, C=par[-2], betas=par[-1])
+    P.generate_seq(duration)
     # assume that timestamps list is ordered ascending with respect to u then v [(0,1), (0,2), .., (1,0), (1,2), ...]
     events_list = []
     for m in range(len(mu_array)):
@@ -84,20 +104,28 @@ def simulate_sum_betas_dia_bp(par, a_nodes, end_time, return_list=False):
         return events_list, events_dict
     return events_dict
 
-def simulate_sum_betas_off_bp(par_ab, par_ba, a_nodes, b_nodes, end_time, return_list=False):
 
-    # parameters = (mu, alphas, C, betas)
-    if len(par_ba) == 5: # 2-alpha model
-        mu_array, alpha_matrix = get_mu_array_alpha_matrix_off_bp(par_ab[0], par_ab[1:3], par_ba[0], par_ba[1:3],
-                                                                  len(a_nodes), len(b_nodes))
-    elif len(par_ba) == 7: # 4-alpha model
-        mu_array, alpha_matrix = get_mu_array_alpha_matrix_off_bp(par_ab[0], par_ab[1:5], par_ba[0], par_ba[1:5],
-                                                                  len(a_nodes), len(b_nodes))
-    elif len(par_ba) == 9: # 6-alpha model
-        mu_array, alpha_matrix = get_mu_array_alpha_matrix_off_bp(par_ab[0], par_ab[1:7], par_ba[0], par_ba[1:7],
-                                                                  len(a_nodes), len(b_nodes))
+def simulate_off_bp(par_ab, par_ba, a_nodes, b_nodes, duration, return_list=False):
+    """
+    simulate two MULCH off-diagonal block pairs (a, b) & (b, a) , where a != b
+
+    :param tuple par_ab: block pair (a, b) parameters (mu, alphas_1, .., alpha_n, C, betas)
+    :param tuple par_ba: block pair (b, a) parameters (mu, alphas_1, .., alpha_n, C, betas)
+    :param a_nodes: array of ids of nodes in block (a).
+    :param b_nodes: array of ids of nodes in block (b).
+    :param duration: network's duration (T)
+    :param return_list: only used for additional functionality checking
+    :return: events_dict_ab, events_dict_ba - Two events_dict for events in block pair (a, b) and (b, a) respectively.
+        events_dict_ab is a dictionary {(u, v) node pairs in (a, b) : [t1, t2, ...] array of events between (u, v)}.
+        events_dict_ba is for (b, a).
+    """
+
+    # get (2m, 2m) excitation matrix, m = # of node pair per block pair (a, b) = (b, a)
+    n_alpha = len(par_ba) - 3   # number of types of excitations
+    mu_array, alpha_matrix = get_mu_array_alpha_matrix_off_bp(par_ab[0], par_ab[1: n_alpha+1], par_ba[0]
+                                                              , par_ba[1: n_alpha+1], len(a_nodes), len(b_nodes))
     P = MHP_Kernels_2(mu=mu_array, alpha=alpha_matrix, C=par_ab[-2], C_r=par_ba[-2], betas=par_ab[-1])
-    P.generate_seq(end_time)
+    P.generate_seq(duration)
 
     # assume that timestamps list is ordered ascending with respect to u then v [(0,1), (0,2), .., (1,0), (1,2), ...]
     events_list = []
@@ -114,12 +142,19 @@ def simulate_sum_betas_off_bp(par_ab, par_ba, a_nodes, b_nodes, end_time, return
     return events_dict_ab, events_dict_ba
 #%% Excitation matrix and baseline array
 
-def get_6_alphas_matrix_dia_bp(alphas, n_nodes):
+def get_6_alphas_matrix_dia_bp(alphas, n_a):
+    """Get (m, m) excitation matrix for on diagonal block pair, m = number of node pair in block pair
+
+    :param alphas: (6,) array of values of excitations of block pair (a, a)
+    :param n_a: number of nodes in block (a)
+    :return: (m, m) excitation matrix
+    """
+
     alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr = alphas
     # add alpha_n, alpha_br to alpha_matrix
-    block = (np.ones((n_nodes - 1, n_nodes - 1)) - np.identity(n_nodes - 1)) * alpha_br + np.identity(n_nodes - 1) * alpha_n
-    alpha_matrix = np.kron(np.eye(n_nodes), block)
-    np_list = get_np_dia_list(n_nodes)
+    block = (np.ones((n_a - 1, n_a - 1)) - np.identity(n_a - 1)) * alpha_br + np.identity(n_a - 1) * alpha_n
+    alpha_matrix = np.kron(np.eye(n_a), block)
+    np_list = get_np_dia_list(n_a)
     # loop through node pairs in block pair (a1, b1)
     for from_idx, (i, j) in enumerate(np_list):
         # loop through all node pairs
@@ -137,13 +172,23 @@ def get_6_alphas_matrix_dia_bp(alphas, n_nodes):
             elif j==x and i!=y:
                 alpha_matrix[from_idx, to_idx] = alpha_alr
     return alpha_matrix
-def get_6_alphas_matrix_off_bp(alphas_ab, alphas_ba, N_a, N_b):
+
+
+def get_6_alphas_matrix_off_bp(alphas_ab, alphas_ba, n_a, n_b):
+    """Get (2m, 2m) excitation matrix for two off-diagonal block pair, m = number of node pair in block pair (a,b)
+
+    :param alphas_ab: (6,) array of values of excitations of block pair (a, b)
+    :param alphas_ba: (6,) array of values of excitations of block pair (b, a)
+    :param n_a: number of nodes in block (a)
+    :param n_b: number of nodes in block (b)
+    :return: (2m, 2m) excitation matrix
+    """
     alpha_n_ab, alpha_r_ab, alpha_br_ab, alpha_gr_ab, alpha_al_ab, alpha_alr_ab = alphas_ab
     alpha_n_ba, alpha_r_ba, alpha_br_ba, alpha_gr_ba, alpha_al_ba, alpha_alr_ba = alphas_ba
-    M_ab = N_a * N_b
+    M_ab = n_a * n_b
     # alpha_matrix (2M_ab , 2M_ab)
     alpha_matrix = np.zeros((2*M_ab , 2*M_ab))
-    np_list = get_np_off_list(N_a, N_b)
+    np_list = get_np_off_list(n_a, n_b)
     # loop through node pairs in block pair (a, b)
     for from_idx, (i, j) in enumerate(np_list[:M_ab]):
         # loop through all node pairs
@@ -190,8 +235,15 @@ def get_6_alphas_matrix_off_bp(alphas_ab, alphas_ba, N_a, N_b):
                 alpha_matrix[from_idx, to_idx] = alpha_alr_ba
     return alpha_matrix
 
-# model (n, r, br, gr) array parameters
+
 def get_4_alphas_matrix_dia_bp(alphas, n_nodes):
+    """Get (m, m) excitation matrix for on diagonal block pair, m = number of node pair in block pair
+
+    :param alphas: (4,) array of values of excitations of block pair (a, a)
+    :param n_a: number of nodes in block (a)
+    :return: (m, m) excitation matrix
+    """
+
     alpha_n, alpha_r, alpha_br, alpha_gr = alphas
     nodes_set = set(np.arange(n_nodes))  # set of nodes
     block = (np.ones((n_nodes - 1, n_nodes - 1)) - np.identity(n_nodes - 1)) * alpha_br + np.identity(n_nodes - 1) * alpha_n
@@ -206,6 +258,14 @@ def get_4_alphas_matrix_dia_bp(alphas, n_nodes):
                     alpha_matrix[node_pair_index((u, v), n_nodes), node_pair_index((i, u), n_nodes)] = alpha_gr
     return alpha_matrix
 def get_4_alphas_matrix_off_bp(alphas_ab, alphas_ba, n_nodes_a, n_nodes_b):
+    """Get (2m, 2m) excitation matrix for two off-diagonal block pair, m = number of node pair in block pair (a,b)
+
+    :param alphas_ab: (4,) array of values of excitations of block pair (a, b)
+    :param alphas_ba: (4,) array of values of excitations of block pair (b, a)
+    :param n_a: number of nodes in block (a)
+    :param n_b: number of nodes in block (b)
+    :return: (2m, 2m) excitation matrix
+    """
     M = n_nodes_a * n_nodes_b  # number of nodes pair per block pair
     alpha_n_ab, alpha_r_ab, alpha_br_ab, alpha_gr_ab = alphas_ab
     alpha_n_ba, alpha_r_ba, alpha_br_ba, alpha_gr_ba = alphas_ba
@@ -238,6 +298,13 @@ def get_4_alphas_matrix_off_bp(alphas_ab, alphas_ba, n_nodes_a, n_nodes_b):
 
 
 def get_2_alphas_matrix_dia_bp(alphas, n_nodes):
+    """Get (m, m) excitation matrix for on diagonal block pair, m = number of node pair in block pair
+
+    :param alphas: (2,) array of values of excitations of block pair (a, a)
+    :param n_a: number of nodes in block (a)
+    :return: (m, m) excitation matrix
+    """
+
     alpha_n, alpha_r = alphas
     block = np.identity(n_nodes - 1) * alpha_n
     alpha_matrix = np.kron(np.eye(n_nodes), block)
@@ -248,6 +315,14 @@ def get_2_alphas_matrix_dia_bp(alphas, n_nodes):
                 alpha_matrix[node_pair_index((u, v), n_nodes), node_pair_index((v, u), n_nodes)] = alpha_r
     return alpha_matrix
 def get_2_alphas_matrix_off_bp(alphas_ab, alphas_ba, n_nodes_a, n_nodes_b):
+    """Get (2m, 2m) excitation matrix for two off-diagonal block pair, m = number of node pair in block pair (a,b)
+
+    :param alphas_ab: (2,) array of values of excitations of block pair (a, b)
+    :param alphas_ba: (2,) array of values of excitations of block pair (b, a)
+    :param n_a: number of nodes in block (a)
+    :param n_b: number of nodes in block (b)
+    :return: (2m, 2m) excitation matrix
+    """
     M = n_nodes_a * n_nodes_b  # number of processes
     alpha_n_ab, alpha_r_ab = alphas_ab
     alpha_n_ba, alpha_r_ba = alphas_ba
@@ -276,37 +351,63 @@ def get_2_alphas_matrix_off_bp(alphas_ab, alphas_ba, n_nodes_a, n_nodes_b):
         (np.hstack((alpha_matrix_ab_ab, alpha_matrix_ab_ba)), np.hstack((alpha_matrix_ba_ab, alpha_matrix_ba_ba))))
     return alpha_matrix
 
-def get_mu_array_alpha_matrix_dia_bp(mu, alphas, n_nodes):
+def get_mu_array_alpha_matrix_dia_bp(mu, alphas, n_a):
+    """Get baseline array and excitation matrix for on diagonal block pair.
+
+    m = number of node pair in block pair
+    baseline array (mu_array) = (m,) array of diagonal block pair mu parameter
+    excitation matrix = (m, m) array
+
+    :param mu: diagonal block pair mu parameter
+    :param alphas: array of values of excitations of block pair (a, a)
+    :param n_a: number of nodes in block (a)
+    :return: (m,) baseline array, (m, m) excitation matrix
+    """
+
     n_alphas = len(alphas)
-    M = n_nodes * (n_nodes - 1)  # number of node pairs in block pair
+    M = n_a * (n_a - 1)  # number of node pairs in block pair
     # excitation matrix
     if n_alphas == 6:
-        alpha_matrix = get_6_alphas_matrix_dia_bp(alphas, n_nodes)
+        alpha_matrix = get_6_alphas_matrix_dia_bp(alphas, n_a)
     elif n_alphas == 4:
-        alpha_matrix = get_4_alphas_matrix_dia_bp(alphas, n_nodes)
+        alpha_matrix = get_4_alphas_matrix_dia_bp(alphas, n_a)
     else:
-        alpha_matrix = get_2_alphas_matrix_dia_bp(alphas, n_nodes)
+        alpha_matrix = get_2_alphas_matrix_dia_bp(alphas, n_a)
     # mu array (M, 1)
     mu_array = np.ones(M) * mu
     return mu_array, alpha_matrix
 
 
-def get_mu_array_alpha_matrix_off_bp(mu_ab, alphas_ab, mu_ba, alphas_ba, n_nodes_a, n_nodes_b):
+def get_mu_array_alpha_matrix_off_bp(mu_ab, alphas_ab, mu_ba, alphas_ba, n_a, n_b):
+    """Get baseline array and excitation matrix for two off-diagonal block pairs.
+
+    m = number of node pair in block pair (a, b) = (b, a)
+    baseline array (mu_array) = (2m,) array of both off-diagonal block pairs mu's parameter
+    excitation matrix = (2m, 2m) array
+
+    :param mu_ab: (a, b) block pair mu parameter
+    :param mu_ba: (b, a) block pair mu parameter
+    :param alphas_ab: array of values of excitations of block pair (a, b)
+    :param alphas_ab: array of values of excitations of block pair (b, a)
+    :param n_a: number of nodes in block (a)
+    :param n_a: number of nodes in block (b)
+    :return: (2m,) baseline array, (2m, 2m) excitation matrix
+    """
     n_alphas = len(alphas_ab)
     # excitation matrix
     if n_alphas == 6:
-        alpha_matrix = get_6_alphas_matrix_off_bp(alphas_ab, alphas_ba, n_nodes_a, n_nodes_b)
+        alpha_matrix = get_6_alphas_matrix_off_bp(alphas_ab, alphas_ba, n_a, n_b)
     elif n_alphas == 4:
-        alpha_matrix = get_4_alphas_matrix_off_bp(alphas_ab, alphas_ba, n_nodes_a, n_nodes_b)
+        alpha_matrix = get_4_alphas_matrix_off_bp(alphas_ab, alphas_ba, n_a, n_b)
     else:
-        alpha_matrix = get_2_alphas_matrix_off_bp(alphas_ab, alphas_ba, n_nodes_a, n_nodes_b)
-    M_ab = n_nodes_a* n_nodes_b
+        alpha_matrix = get_2_alphas_matrix_off_bp(alphas_ab, alphas_ba, n_a, n_b)
+    M_ab = n_a * n_b
 
     # mu array (2*M_ab,1)
     mu_array = np.array([mu_ab] * M_ab + [mu_ba] * M_ab)
     return mu_array, alpha_matrix
 
-#%% helper function
+#%% Other helper function
 
 def get_np_dia_list(n_nodes):
     """

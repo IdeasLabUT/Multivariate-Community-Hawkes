@@ -1,9 +1,26 @@
+"""Simulated Networks MULCH Experiments (Section 5.1)
+
+This script tests the ability of both spectral clustering and our
+likelihood refinement procedure to recover true node memberships
+on networks simulated from MULCH. Also, we test MULCH's
+parameter Estimation Accuracy.
+
+This file contains the following functions - more details in functions docstring:
+    * spectral_clustering_accuracy()
+    * refinement_accuracy()
+    * parameters_estimation_MSE()
+
+@author: Hadeel Soliman
+"""
+
 # TODO fix simulation parameters and make sure all prints are consistent and save files also
+# TODO figure out which parameters to delete
+# TODO remove save file option in functions
+
 import numpy as np
 import pickle
-
 import utils_fit_model as mulch_fit
-from utils_generate_sum_betas_model import simulate_sum_kernel_model
+from utils_generate_model import simulate_mulch
 from utils_fit_refine_mulch import fit_refinement_mulch
 from utils_fit_bp import cal_num_events
 import matplotlib.pyplot as plt
@@ -167,7 +184,22 @@ def get_simulation_params(n_classes, level, n_alpha, sum):
     return param
 
 #%% simulation accuracy tests
-def spectral_clustering_accurancy(n_run = 10, verbose=False, save_file=None):
+def spectral_clustering_accuracy(n_run = 10, verbose=False, file_name=None):
+    """
+    evaluate spectral clustering accuracy as both n, T increase
+
+    Simulate from MULCH at K=4 and #excitations=6. We use an assortative mixing parameters.
+
+    Steps:
+        - generate networks at a varying range of n (#nodes) and T (network's duration).
+        - at each simulation, run spectral clustering and compute adjusted Rand Index
+          between true and estimeted nodes membership
+
+    :param n_run: # number of simulation per (n, T) values
+    :param verbose: print intermediate results details
+    :param file_name: DELETE
+    :return:
+    """
     K, n_alpha = 4, 6
     percent = [1 / K] * K  # nodes percentage membership
     sim_param = get_simulation_params(K, level=1000, n_alpha=n_alpha, sum=True)
@@ -183,7 +215,7 @@ def spectral_clustering_accurancy(n_run = 10, verbose=False, save_file=None):
             RI_avg = 0
             n_events_avg = 0
             for it in range(n_run):
-                events_dict, node_mem_true = simulate_sum_kernel_model(sim_param, N, K, percent, T)
+                events_dict, node_mem_true = simulate_mulch(sim_param, N, K, percent, T)
                 n_events = cal_num_events(events_dict)
                 agg_adj = mulch_fit.event_dict_to_aggregated_adjacency(N, events_dict)
                 # if it == 0 and verbose:
@@ -209,46 +241,69 @@ def spectral_clustering_accurancy(n_run = 10, verbose=False, save_file=None):
     results_dict["N_range"] = N_range
     results_dict["T_range"] = T_range
     results_dict["n_run"] = n_run
-    if save_file is not None:
-        with open(f"{save_file}.p", 'wb') as fil:
+    if file_name is not None:
+        with open(f"{file_name}.p", 'wb') as fil:
             pickle.dump(results_dict, fil)
     return results_dict
 
 
-def parameters_estimation_MSE(fixed_n=True, n_run = 10, verbose=False, save_file=None):
+def parameters_estimation_MSE(fixed_n=True, n_run = 10, verbose=False, file_name=None):
+    """
+    test accuracy of model's MLE
+
+    generate data from the MULCH model with K = 2 and #excitations=6.
+    We assume parameters of the two diagonal block pairs are equal,
+    and similarly, parameters of the off-diagonal block pairs are equal.
+    Then, fit model and compute Mean Square Error for each MULCH parameter.
+
+    Two tests can be done:
+        - set n (#nodes in network) fixed and evaluate parameters MSE over
+          range of T (duration)
+        - set T (network duration) fixed, and vary n (#nodes)
+
+    :param fixed_n: if True, set n fixed, simulate networks while varying T.
+        Otherwise, fix T, and vary n.
+    :param n_run: number of simulations per a pair of (n, T)
+    :param verbose: print all intermediate results
+    :param file_name: DELETE
+    :return: results dictionary
+    """
     K = 2
     n_alpha = 6
     percent = [1 / K] * K  # nodes percentage membership
     sim_param = get_simulation_params(K, level=1000, n_alpha=n_alpha, sum=True)
     betas = sim_param[-1]
     if fixed_n:
-        N_range = np.array([70])
+        n_range = np.array([70])
         T_range = np.arange(600, 1401, 200)
     else:
-        N_range = np.arange(40, 101, 15)
+        n_range = np.arange(40, 101, 15)
         T_range = np.array([1000])
 
-    mMSE_mu = np.zeros((len(N_range), len(T_range)))
-    mMSE_alpha_n = np.zeros((len(N_range), len(T_range)))
-    mMSE_alpha_r = np.zeros((len(N_range), len(T_range)))
-    mMSE_alpha_br = np.zeros((len(N_range), len(T_range)))
-    mMSE_alpha_gr = np.zeros((len(N_range), len(T_range)))
-    mMSE_alpha_al = np.zeros((len(N_range), len(T_range)))
-    mMSE_alpha_alr = np.zeros((len(N_range), len(T_range)))
-    mMSE_C = np.zeros((len(N_range), len(T_range)))
-    sMSE_mu = np.zeros((len(N_range), len(T_range)))
-    sMSE_alpha_n = np.zeros((len(N_range), len(T_range)))
-    sMSE_alpha_r = np.zeros((len(N_range), len(T_range)))
-    sMSE_alpha_br = np.zeros((len(N_range), len(T_range)))
-    sMSE_alpha_gr = np.zeros((len(N_range), len(T_range)))
-    sMSE_alpha_al = np.zeros((len(N_range), len(T_range)))
-    sMSE_alpha_alr = np.zeros((len(N_range), len(T_range)))
-    sMSE_C = np.zeros((len(N_range), len(T_range)))
+    # hold parameter's average MSE for range of (n) and (T)
+    mMSE_mu = np.zeros((len(n_range), len(T_range)))
+    mMSE_alpha_n = np.zeros((len(n_range), len(T_range)))
+    mMSE_alpha_r = np.zeros((len(n_range), len(T_range)))
+    mMSE_alpha_br = np.zeros((len(n_range), len(T_range)))
+    mMSE_alpha_gr = np.zeros((len(n_range), len(T_range)))
+    mMSE_alpha_al = np.zeros((len(n_range), len(T_range)))
+    mMSE_alpha_alr = np.zeros((len(n_range), len(T_range)))
+    mMSE_C = np.zeros((len(n_range), len(T_range)))
+    # hold parameter's standard deviation MSE for range of (n) and (T)
+    sMSE_mu = np.zeros((len(n_range), len(T_range)))
+    sMSE_alpha_n = np.zeros((len(n_range), len(T_range)))
+    sMSE_alpha_r = np.zeros((len(n_range), len(T_range)))
+    sMSE_alpha_br = np.zeros((len(n_range), len(T_range)))
+    sMSE_alpha_gr = np.zeros((len(n_range), len(T_range)))
+    sMSE_alpha_al = np.zeros((len(n_range), len(T_range)))
+    sMSE_alpha_alr = np.zeros((len(n_range), len(T_range)))
+    sMSE_C = np.zeros((len(n_range), len(T_range)))
 
     for T_idx, T in enumerate(T_range):
-        for N_idx, N in enumerate(N_range):
+        for N_idx, n in enumerate(n_range):
             if verbose:
-                print(f"\nAt duration={T}, n_nodes:{N} ")
+                print(f"\nAt duration={T}, n_nodes:{n} ")
+            # hold parameters' MSE for current run (certain value of n, T)
             MSE_mu = np.zeros(n_run)
             MSE_alpha_n = np.zeros(n_run)
             MSE_alpha_r = np.zeros(n_run)
@@ -258,18 +313,20 @@ def parameters_estimation_MSE(fixed_n=True, n_run = 10, verbose=False, save_file
             MSE_alpha_alr = np.zeros(n_run)
             MSE_C = np.zeros(n_run)
             for it in range(n_run):
-                events_dict, node_mem_true = simulate_sum_kernel_model(sim_param, N, K, percent, T)
+                # simulate from mulch at a certain n, T
+                events_dict, node_mem_true = simulate_mulch(sim_param, n, K, percent, T)
                 n_events = cal_num_events(events_dict)
-                agg_adj = mulch_fit.event_dict_to_aggregated_adjacency(N, events_dict)
+                agg_adj = mulch_fit.event_dict_to_aggregated_adjacency(n, events_dict)
                 # if it == 0:
                 #     mulch_fit.plot_adj(agg_adj, node_mem_true, K, f"N={N}, T={T}")
+                # run spectral clustering
                 node_mem_spectral = mulch_fit.spectral_cluster1(agg_adj, K, n_kmeans_init=500, normalize_z=True,
                                                                 multiply_s=True)
                 rand_i = adjusted_rand_score(node_mem_true, node_mem_spectral)
                 if verbose:
                     print(f"\t\titer# {it}: RI={rand_i:.3f}, #events={n_events}")
-                fit_param, ll_train, _ = mulch_fit.model_fit_kernel_sum(n_alpha, events_dict, node_mem_spectral, K, T,
-                                                                        betas)
+                fit_param, ll_train, _ = mulch_fit.model_fit(n_alpha, events_dict, node_mem_spectral, K, T,
+                                                             betas)
                 MSE_mu[it] = np.sum(np.square(sim_param[0] - fit_param[0]))
                 MSE_alpha_n[it] = np.sum(np.square(sim_param[1] - fit_param[1]))
                 MSE_alpha_r[it] = np.sum(np.square(sim_param[2] - fit_param[2]))
@@ -279,7 +336,7 @@ def parameters_estimation_MSE(fixed_n=True, n_run = 10, verbose=False, save_file
                 MSE_alpha_alr[it] = np.sum(np.square(sim_param[6] - fit_param[6]))
                 MSE_C[it] = np.sum(np.square(sim_param[7][:, :, :-1] - fit_param[7][:, :, :-1]))
                 if verbose:
-                    print(f"\t\tMSE: mu={MSE_mu[it]:.4f}, alpha_r={MSE_alpha_r[it]:.4f}, "
+                    print(f"\t\tSample MSE: mu={MSE_mu[it]:.4f}, alpha_r={MSE_alpha_r[it]:.4f}, "
                           f"alpha_br{MSE_alpha_br[it]:.4f}, C={MSE_C[it]:.4f}")
             mMSE_mu[N_idx, T_idx] = np.mean(MSE_mu)
             mMSE_alpha_n[N_idx, T_idx] = np.mean(MSE_alpha_n)
@@ -306,20 +363,39 @@ def parameters_estimation_MSE(fixed_n=True, n_run = 10, verbose=False, save_file
                                 , mMSE_alpha_alr, mMSE_C)
     results_dict["MSE_std"] = (sMSE_mu, sMSE_alpha_n, sMSE_alpha_r, sMSE_alpha_br, sMSE_alpha_gr, sMSE_alpha_al
                                , sMSE_alpha_alr, sMSE_C)
-    results_dict["N_range"] = N_range
+    results_dict["N_range"] = n_range
     results_dict["T_range"] = T_range
     results_dict["n_run"] = n_run
-    if save_file is not None:
+    if file_name is not None:
         if fixed_n:
-            file_name= f"{save_file}_fixed_n.p"
+            file_name= f"{file_name}_fixed_n.p"
         else:
-            file_name= f"{save_file}_fixed_t.p"
+            file_name= f"{file_name}_fixed_t.p"
         with open(file_name, 'wb') as fil:
             pickle.dump(results_dict, fil)
     return results_dict
 
 
-def refinement_accuracy(fixed_n=True, max_refine_iter = 10, n_run = 10, verbose=False, save_file=None):
+def refinement_accuracy(fixed_n=True, max_refine_iter = 10, n_run = 10, verbose=False, file_name=None):
+    """ Nodes membership accuracy after running log-likelihood alg
+
+    simulate networks from MULCH at K=4 & #excitations=6, then compute adjusted rand
+    index (RI) between true and estimated nodes membership. We compare RI score
+    of estimated node membership after running both spectral clustering and our
+    refinement algorithm.
+
+    Two simulation test can be done:
+        - simulated at (#nodes) n = 80 and vary T.
+        - simulate at (network's duration) T = 2000 and vary n
+
+    :param fixed_n: if True, set n fixed, simulate networks at varying T.
+        Otherwise, fix T, and vary n.
+    :param max_refine_iter: Maximum number of refinement iterations
+    :param n_run: number of simulations per a pair of (n, T)
+    :param verbose: print all intermediate results
+    :param file_name: DELETE
+    :return: result dictionary
+    """
     K, n_alpha = 4, 6
     p = [1 / K] * K  # balanced node membership
     if fixed_n:
@@ -341,7 +417,7 @@ def refinement_accuracy(fixed_n=True, max_refine_iter = 10, n_run = 10, verbose=
             ri_sp_avg = 0
             ri_ref_avg = 0
             for it in range(n_run):
-                events_dict, nodes_mem_true = simulate_sum_kernel_model(sim_param, N, K, p, T)
+                events_dict, nodes_mem_true = simulate_mulch(sim_param, N, K, p, T)
                 n_events_all = cal_num_events(events_dict)
                 if verbose:
                     print(f"\titer {it}: #simulated events={n_events_all}")
@@ -371,11 +447,11 @@ def refinement_accuracy(fixed_n=True, max_refine_iter = 10, n_run = 10, verbose=
     results_dict["N_range"] = N_range
     results_dict["MAX_ITER"] = max_refine_iter
     results_dict["runs"] = n_run
-    if save_file is not None:
+    if file_name is not None:
         if fixed_n:
-            file_name = f"{save_file}_fixed_n.p"
+            file_name = f"{file_name}_fixed_n.p"
         else:
-            file_name = f"{save_file}_fixed_t.p"
+            file_name = f"{file_name}_fixed_t.p"
         with open(file_name, 'wb') as fil:
             pickle.dump(results_dict, fil)
     return results_dict
@@ -385,6 +461,6 @@ def refinement_accuracy(fixed_n=True, max_refine_iter = 10, n_run = 10, verbose=
 if __name__ == "__main__":
     np.set_printoptions(suppress=True)
 
-    # res = spectral_clustering_accurancy(n_run=10, verbose=True, save_file=None)
+    # res = spectral_clustering_accuracy(n_run=10, verbose=True, save_file=None)
     # res = parameters_estimation_MSE(fixed_n=True, n_run=10, verbose=True, save_file=None)
-    res = refinement_accuracy(fixed_n=True, max_refine_iter=10, n_run=1, verbose=True, save_file=None)
+    res = refinement_accuracy(fixed_n=True, max_refine_iter=10, n_run=1, verbose=True, file_name=None)

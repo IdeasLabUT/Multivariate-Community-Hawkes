@@ -46,8 +46,7 @@ def simulate_count_motif_experiment_chip_bhm(chip, dataset_motif, param, nodes_m
         # simulate from BHM
         else:
             _, events_dict_sim = block_generative_model(n_nodes, block_prob, mu, alpha, beta, T_sim)
-        n_evens_sim = cal_num_events(events_dict_sim)
-        recip_sim, trans_sim, sim_motif_month = cal_recip_trans_motif(events_dict_sim, n_nodes, motif_delta)
+        recip_sim, trans_sim, sim_motif_month, n_evens_sim = cal_recip_trans_motif(events_dict_sim, n_nodes, motif_delta)
         sim_motif_avg += sim_motif_month
         if verbose:
             print(f"n_events={n_evens_sim}, recip={recip_sim:.4f}, trans={trans_sim:.4f}")

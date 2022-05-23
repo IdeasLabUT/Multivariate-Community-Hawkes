@@ -1,7 +1,7 @@
 import random
 import numpy as np
 from hawkes.MHP import MHP
-import utils_generate_sum_betas_model as gen
+import utils_generate_model as gen
 
 
 def simulate_one_beta_model(sim_param, n_nodes, n_classes, p, duration):
