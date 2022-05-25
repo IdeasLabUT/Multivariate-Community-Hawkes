@@ -10,7 +10,8 @@ This scripts contains functions for:
 
 import networkx as nx
 import numpy as np
-from scipy import integrate
+from bisect import bisect_left
+# from scipy import integrate
 from sklearn import metrics
 import matplotlib.pyplot as plt
 import sys
@@ -23,7 +24,7 @@ from dynetworkx import ImpulseDiGraph
 sys.path.append("./CHIP-Network-Model")
 from dataset_utils import load_enron_train_test, load_reality_mining_test_train
 import utils_fit_model as mulch_fit
-from bisect import bisect_left
+
 
 
 #%% motif counts functions
@@ -84,7 +85,7 @@ def simulate_count_motif_experiment(dataset_motif_tuple, params_tup, nodes_mem, 
     Simulate networks from MULCH fit parameters and compute temporal motif counts
 
     :param dataset_motif_tuple: actual dataset (reciprocity, transitivity, motif_counts, dataset_n_events_train)
-    :param params_tup: MULCH parameters (mu_bp, alphas_1_bp, .., alpha_n_bp, C_bp, betas )
+    :param params_tup: MULCH parameters (mu_bp, alphas_1_bp, .., alpha_s_bp, C_bp, betas )
     :param nodes_mem: block membership for nodes in train dataset
     :param K: number of classes
     :param end_time_sim: Simulation duration
@@ -179,11 +180,11 @@ def mulch_predict_probs_and_actual(n_nodes, t0, delta, events_dict, params_tup, 
     """
     n_alpha = len(params_tup) - 3   # number of excitation types
     if n_alpha == 6:
-        mu_bp, alpha_n_bp, alpha_r_bp, alpha_br_bp, alpha_gr_bp, alpha_al_bp, alpha_alr_bp, C_bp, betas = params_tup
+        mu_bp, alpha_s_bp, alpha_r_bp, alpha_tc_bp, alpha_gr_bp, alpha_al_bp, alpha_alr_bp, C_bp, betas = params_tup
     elif n_alpha == 4:
-        mu_bp, alpha_n_bp, alpha_r_bp, alpha_br_bp, alpha_gr_bp, C_bp, betas = params_tup
+        mu_bp, alpha_s_bp, alpha_r_bp, alpha_tc_bp, alpha_gr_bp, C_bp, betas = params_tup
     else:   # n_alpha = 2
-        mu_bp, alpha_n_bp, alpha_r_bp, C_bp, betas = params_tup
+        mu_bp, alpha_s_bp, alpha_r_bp, C_bp, betas = params_tup
 
     K = len(mu_bp)  # number of blocks
     Q = len(betas)  # number of decays
@@ -222,13 +223,13 @@ def mulch_predict_probs_and_actual(n_nodes, t0, delta, events_dict, params_tup, 
                 u_b, v_b = nodes_mem_all[u], nodes_mem_all[v]
                 # block pair fit parameters
                 if n_alpha ==6:
-                    par = (mu_bp[u_b, v_b], alpha_n_bp[u_b, v_b], alpha_r_bp[u_b, v_b], alpha_br_bp[u_b, v_b],
+                    par = (mu_bp[u_b, v_b], alpha_s_bp[u_b, v_b], alpha_r_bp[u_b, v_b], alpha_tc_bp[u_b, v_b],
                         alpha_gr_bp[u_b, v_b], alpha_al_bp[u_b, v_b], alpha_alr_bp[u_b, v_b], C_bp[u_b, v_b], betas)
                 elif n_alpha == 4:
-                    par = (mu_bp[u_b, v_b], alpha_n_bp[u_b, v_b], alpha_r_bp[u_b, v_b], alpha_br_bp[u_b, v_b],
+                    par = (mu_bp[u_b, v_b], alpha_s_bp[u_b, v_b], alpha_r_bp[u_b, v_b], alpha_tc_bp[u_b, v_b],
                            alpha_gr_bp[u_b, v_b], C_bp[u_b, v_b], betas)
                 else:   # n_alpha =2
-                    par = (mu_bp[u_b, v_b], alpha_n_bp[u_b, v_b], alpha_r_bp[u_b, v_b], C_bp[u_b, v_b], betas)
+                    par = (mu_bp[u_b, v_b], alpha_s_bp[u_b, v_b], alpha_r_bp[u_b, v_b], C_bp[u_b, v_b], betas)
                 if u_b == v_b:
                     integral = mulch_uv_intensity_dia_integral(n_alpha, delta, (u, v), par, dia_bp_events_dict[u_b])
                 else:
@@ -259,22 +260,22 @@ def mulch_uv_intensity_dia_integral(n_alpha, delta, uv, params, events_dict):
     :return: (float) integral result
     """
     if n_alpha == 6:
-        mu, alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr, C, betas = params
+        mu, alpha_s, alpha_r, alpha_tc, alpha_gr, alpha_al, alpha_alr, C, betas = params
     elif n_alpha == 4:
-        mu, alpha_n, alpha_r, alpha_br, alpha_gr, C, betas = params
+        mu, alpha_s, alpha_r, alpha_tc, alpha_gr, C, betas = params
     else:  # n_alpha =2
-        mu, alpha_n, alpha_r, C, betas = params
+        mu, alpha_s, alpha_r, C, betas = params
     u, v = uv
     integral = mu * delta
     # assume all timestamps in events_dict are less than t0
     for (x, y) in events_dict:
-        if (u, v) == (x, y):  # same node_pair events (alpha_n)
-            integral -= alpha_n * events_dict[(x, y)]
+        if (u, v) == (x, y):  # same node_pair events (alpha_s)
+            integral -= alpha_s* events_dict[(x, y)]
         elif (v, u) == (x, y):  # reciprocal node_pair events (alpha_r)
             integral -= alpha_r * events_dict[(x, y)]
-        # br node_pairs events (alpha_br)
+        # br node_pairs events (alpha_tc)
         elif n_alpha > 2 and u == x and v != y:
-            integral -= alpha_br * events_dict[(x, y)]
+            integral -= alpha_tc * events_dict[(x, y)]
         # gr node_pairs events (alpha_gr)
         elif n_alpha > 2 and u == y and v != x:
             integral -= alpha_gr * events_dict[(x, y)]
@@ -302,21 +303,21 @@ def mulch_uv_intensity_off_integral(n_alpha, delta, uv, params, events_dict, eve
     """
     # assume timestamps in events_dict, events_dict_r are less than t0
     if n_alpha == 6:
-        mu, alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr, C, betas = params
+        mu, alpha_s, alpha_r, alpha_tc, alpha_gr, alpha_al, alpha_alr, C, betas = params
     elif n_alpha == 4:
-        mu, alpha_n, alpha_r, alpha_br, alpha_gr, C, betas = params
+        mu, alpha_s, alpha_r, alpha_tc, alpha_gr, C, betas = params
     else:   # n_alpha =2
-        mu, alpha_n, alpha_r, C, betas = params
+        mu, alpha_s, alpha_r, C, betas = params
     u, v = uv
     integral = mu * delta
     # loop through node pairs in block pair ab
     for (x, y) in events_dict:
-        # same node_pair events (alpha_n)
+        # same node_pair events (alpha_s)
         if (u, v) == (x, y):
-            integral -= alpha_n * events_dict[(x, y)]
-        # br node_pairs events (alpha_br)
+            integral -= alpha_s* events_dict[(x, y)]
+        # br node_pairs events (alpha_tc)
         elif n_alpha > 2 and u == x and v != y:
-            integral -= alpha_br * events_dict[(x, y)]
+            integral -= alpha_tc * events_dict[(x, y)]
         # alliance np (alpha_al)
         elif n_alpha > 4 and v == y and u != x:
             integral -= alpha_alr * events_dict[(x, y)]
@@ -338,7 +339,7 @@ def mulch_uv_intensity_off_integral(n_alpha, delta, uv, params, events_dict, eve
 def mulch_uv_intensity_dia(t, uv, params, events_dict, t0):
     """calculate intensity of node pair (u, v) in a diagonal block pair with 6 excitation types.
         Not used: function is just kept for reference"""
-    mu, alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr, C, betas = params
+    mu, alpha_s, alpha_r, alpha_tc, alpha_gr, alpha_al, alpha_alr, C, betas = params
     u, v = uv
     Q = len(betas)
     intensity = mu
@@ -347,13 +348,13 @@ def mulch_uv_intensity_dia(t, uv, params, events_dict, t0):
         exp_sum_q = 0
         for q in range(Q):
             exp_sum_q += C[q] * betas[q] * np.sum(np.exp(-betas[q] * (t - xy_timestamps_less_t0)))
-        if (u, v) == (x, y):  # same node_pair events (alpha_n)
-            intensity += alpha_n * exp_sum_q
+        if (u, v) == (x, y):  # same node_pair events (alpha_s)
+            intensity += alpha_s* exp_sum_q
         elif (v, u) == (x, y):  # reciprocal node_pair events (alpha_r)
             intensity += alpha_r * exp_sum_q
-        # br node_pairs events (alpha_br)
+        # br node_pairs events (alpha_tc)
         elif u == x and v != y:
-            intensity += alpha_br * exp_sum_q
+            intensity += alpha_tc * exp_sum_q
         # gr node_pairs events (alpha_gr)
         elif u == y and v != x:
             intensity += alpha_gr * exp_sum_q
@@ -368,7 +369,7 @@ def mulch_uv_intensity_dia(t, uv, params, events_dict, t0):
 def mulch_uv_intensity_off(t, uv, params, events_dict, events_dict_r, t0):
     """calculate intensity of node pair (u, v) in a off-diagonal block pair with 6 excitation types.
         Not used: function is just kept for reference"""
-    mu, alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr, C, betas = params
+    mu, alpha_s, alpha_r, alpha_tc, alpha_gr, alpha_al, alpha_alr, C, betas = params
     u, v = uv
     Q = len(betas)
     intensity = mu
@@ -378,12 +379,12 @@ def mulch_uv_intensity_off(t, uv, params, events_dict, events_dict_r, t0):
         exp_sum_q = 0
         for q in range(Q):
             exp_sum_q += C[q] * betas[q] * np.sum(np.exp(-betas[q] * (t - xy_timestamps_less_t0)))
-        # same node_pair events (alpha_n)
+        # same node_pair events (alpha_s)
         if (u, v) == (x, y):
-            intensity += alpha_n * exp_sum_q
-        # br node_pairs events (alpha_br)
+            intensity += alpha_s* exp_sum_q
+        # br node_pairs events (alpha_tc)
         elif u == x and v != y:
-            intensity += alpha_br * exp_sum_q
+            intensity += alpha_tc * exp_sum_q
         # alliance np (alpha_al)
         elif v == y and u != x:
             intensity += alpha_alr * exp_sum_q
@@ -410,7 +411,7 @@ def old_mulch_predict_probs_and_actual(n_nodes, t0, delta, events_dict, params_t
     Computes the predicted probability that a link from u to v appears in
     [t, t + delta)
     """
-    mu_bp, alpha_n_bp, alpha_r_bp, alpha_br_bp, alpha_gr_bp, alpha_al_bp, alpha_alr_bp, C_bp, betas = params_tup
+    mu_bp, alpha_s_bp, alpha_r_bp, alpha_tc_bp, alpha_gr_bp, alpha_al_bp, alpha_alr_bp, C_bp, betas = params_tup
     K = len(mu_bp)
     # hold timestamps < t0, and compute [t0 - timestamps]
     events_dict_less_t0 = {}
@@ -427,7 +428,7 @@ def old_mulch_predict_probs_and_actual(n_nodes, t0, delta, events_dict, params_t
             if u != v:
                 u_b, v_b = nodes_mem_all[u], nodes_mem_all[v]
                 par = (
-                mu_bp[u_b, v_b], alpha_n_bp[u_b, v_b], alpha_r_bp[u_b, v_b], alpha_br_bp[u_b, v_b], alpha_gr_bp[u_b, v_b],
+                mu_bp[u_b, v_b], alpha_s_bp[u_b, v_b], alpha_r_bp[u_b, v_b], alpha_tc_bp[u_b, v_b], alpha_gr_bp[u_b, v_b],
                 alpha_al_bp[u_b, v_b], alpha_alr_bp[u_b, v_b], C_bp[u_b, v_b], betas)
                 if u_b == v_b:
                     # integral = \
@@ -450,7 +451,7 @@ def old_mulch_predict_probs_and_actual(n_nodes, t0, delta, events_dict, params_t
 
     return y, prob_dict
 def old_mulch_uv_intensity_dia_integral(delta, uv, params, events_dict):
-    mu, alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr, C, betas = params
+    mu, alpha_s, alpha_r, alpha_tc, alpha_gr, alpha_al, alpha_alr, C, betas = params
     u, v = uv
     Q = len(betas)
     integral = mu * delta
@@ -460,13 +461,13 @@ def old_mulch_uv_intensity_dia_integral(delta, uv, params, events_dict):
         exp_sum_q = 0
         for q in range(Q):
             exp_sum_q += C[q] * (np.exp(-betas[q]*delta) - 1) * np.sum(np.exp(-betas[q] * t0_minus_txy))
-        if (u, v) == (x, y):  # same node_pair events (alpha_n)
-            integral -= alpha_n * exp_sum_q
+        if (u, v) == (x, y):  # same node_pair events (alpha_s)
+            integral -= alpha_s* exp_sum_q
         elif (v, u) == (x, y):  # reciprocal node_pair events (alpha_r)
             integral -= alpha_r * exp_sum_q
-        # br node_pairs events (alpha_br)
+        # br node_pairs events (alpha_tc)
         elif u == x and v != y:
-            integral -= alpha_br * exp_sum_q
+            integral -= alpha_tc * exp_sum_q
         # gr node_pairs events (alpha_gr)
         elif u == y and v != x:
             integral -= alpha_gr * exp_sum_q
@@ -479,7 +480,7 @@ def old_mulch_uv_intensity_dia_integral(delta, uv, params, events_dict):
     return integral
 def old_mulch_uv_intensity_off_integral(delta, uv, params, events_dict, events_dict_r):
     # assume timestamps in events_dict, events_dict_r are less than t0
-    mu, alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr, C, betas = params
+    mu, alpha_s, alpha_r, alpha_tc, alpha_gr, alpha_al, alpha_alr, C, betas = params
     u, v = uv
     Q = len(betas)
     integral = mu * delta
@@ -489,12 +490,12 @@ def old_mulch_uv_intensity_off_integral(delta, uv, params, events_dict, events_d
         exp_sum_q = 0
         for q in range(Q):
             exp_sum_q += C[q] * (np.exp(-betas[q] * delta) - 1) * np.sum(np.exp(-betas[q] * t0_minus_txy))
-        # same node_pair events (alpha_n)
+        # same node_pair events (alpha_s)
         if (u, v) == (x, y):
-            integral -= alpha_n * exp_sum_q
-        # br node_pairs events (alpha_br)
+            integral -= alpha_s* exp_sum_q
+        # br node_pairs events (alpha_tc)
         elif u == x and v != y:
-            integral -= alpha_br * exp_sum_q
+            integral -= alpha_tc * exp_sum_q
         # alliance np (alpha_al)
         elif v == y and u != x:
             integral -= alpha_alr * exp_sum_q
@@ -548,7 +549,7 @@ if __name__ == "__main__":
     print(f"Reality Mining Dataset at K = {K}")
 
     sp_tup, ref_tup, ref_message = fit_refinement_mulch(events_dict_train, n_nodes_train, end_time_train, K,
-                                                        betas, n_alpha=6, max_iter=0, verbose=True)
+                                                        betas, n_alpha=6, max_ref_iter=0, verbose=True)
 
     # spectral clustering fit results
     nodes_mem_train_sp, fit_param_sp, ll_train_sp, n_events_train, fit_time_sp = sp_tup

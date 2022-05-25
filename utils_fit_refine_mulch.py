@@ -1,18 +1,18 @@
 """fit MULCH + node membership refinement function"""
 # TODO: refinement function can be moved to sum betas model fit fileF
-# TODO: rename all refinemnet functions
+# TODO: rename all refinement functions
 # TODO: remove model_fit_cal_log_likelihood_sum_betas() function
 
 import numpy as np
 import time
 import copy
 from sklearn.metrics import adjusted_rand_score
-import utils_fit_model as mulch_fit
-import utils_fit_bp as mulch_fit_bp
+import utils_fit_model as fit_model
+import utils_fit_bp as fit_bp
 from utils_generate_model import simulate_mulch
 
 
-def fit_refinement_mulch(events_dict, n, end_time, K, betas, n_alpha=6, max_iter=0, verbose=False,
+def fit_refinement_mulch(events_dict, n, end_time, K, betas, n_alpha=6, max_ref_iter=0, verbose=False,
                          nodes_mem_true=None):
     """
     fit MULCH on the network and refine nodes membership
@@ -32,7 +32,7 @@ def fit_refinement_mulch(events_dict, n, end_time, K, betas, n_alpha=6, max_iter
     :param int K: number of blocks
     :param betas: (Q,) array of decays
     :param int n_alpha: (Optional) number of excitation types. Choose between 2, 4, or 6. Default is 6 types (full model)
-    :param int max_iter: (Optional) maximum number of refinement iterations. Default is 0 (no refinement)
+    :param int max_ref_iter: (Optional) maximum number of refinement iterations. Default is 0 (no refinement)
     :param verbose: (Optional) print fitting details
     :param nodes_mem_true: (Optional) only when true nodes membership is known (in case simulation test)
     :return: two tuples of MULCH fitting results using both spectral clustering and refined nodes membership.
@@ -45,8 +45,8 @@ def fit_refinement_mulch(events_dict, n, end_time, K, betas, n_alpha=6, max_iter
     if verbose:
         print("\nRun spectral clustering and fit MULCH")
     start_fit_time = time.time()
-    agg_adj = mulch_fit.event_dict_to_aggregated_adjacency(n, events_dict)
-    nodes_mem0 = mulch_fit.spectral_cluster1(agg_adj, K, n_kmeans_init=500, normalize_z=True, multiply_s=True)
+    agg_adj = fit_model.event_dict_to_aggregated_adjacency(n, events_dict)
+    nodes_mem0 = fit_model.spectral_cluster1(agg_adj, K, n_kmeans_init=500, normalize_z=True, multiply_s=True)
     if nodes_mem_true is not None and verbose:
         print(f"\tadjusted RI between true and spectral membership = {adjusted_rand_score(nodes_mem_true, nodes_mem0):.3f}")
 
@@ -56,24 +56,24 @@ def fit_refinement_mulch(events_dict, n, end_time, K, betas, n_alpha=6, max_iter
     #     print("\tnodes/class# : ", np.sort(n_node_per_class/np.sum(n_node_per_class)))
 
     # 2) fit model and get parameters, log-likelihood
-    fit_param0, LL_bp0, num_events, events_dict_bp0, N_c0 = mulch_fit.model_fit(n_alpha, events_dict,
+    fit_param0, LL_bp0, num_events, events_dict_bp0, N_c0 = fit_model.model_fit(n_alpha, events_dict,
                                                                                 nodes_mem0, K, end_time,
                                                                                 betas, ref=True)
     spectral_fit_time = time.time() - start_fit_time
     if verbose:
         print("\tlog-likelihood = ", np.sum(LL_bp0))
-    # MBHP.print_model_param_kernel_sum(fit_param0)
+    # MBHP.print_mulch_param(fit_param0)
     sp_tuple = (nodes_mem0, fit_param0, np.sum(LL_bp0), num_events, spectral_fit_time)
 
     # no refinement needed if K=1
     if K == 1:
         return sp_tuple, sp_tuple, "No refinement needed at K=1"
-    if max_iter == 0:
+    if max_ref_iter == 0:
         return sp_tuple, sp_tuple, "No refinement (MAX refinement iterations = 0)"
 
     # 3) refinement - stop if node-membership converged, number of blocks decreases, or log-likelihood decreases
-    message = f"Max #iterations ({max_iter}) reached"
-    for ref_iter in range(max_iter):
+    message = f"Max #iterations ({max_ref_iter}) reached"
+    for ref_iter in range(max_ref_iter):
         if verbose:
             print("Refinement iteration #", ref_iter + 1)
         nodes_mem1 = get_nodes_mem_refinement(nodes_mem0, events_dict_bp0, fit_param0, end_time, N_c0, LL_bp0)
@@ -99,7 +99,7 @@ def fit_refinement_mulch(events_dict, n, end_time, K, betas, n_alpha=6, max_iter
             print(f"\tadjusted RI={adjusted_rand_score(nodes_mem_true, nodes_mem1):.3f}")
 
         # fit model on refined node membership
-        fit_param1, LL_bp1, num_events, events_dict_bp1, N_c1 = mulch_fit.model_fit(n_alpha, events_dict, nodes_mem1,
+        fit_param1, LL_bp1, num_events, events_dict_bp1, N_c1 = fit_model.model_fit(n_alpha, events_dict, nodes_mem1,
                                                                                     K, end_time, betas, ref=True)
         # break if train log-likelihood decreased
         if np.sum(LL_bp1) < np.sum(LL_bp0):
@@ -110,7 +110,7 @@ def fit_refinement_mulch(events_dict, n, end_time, K, betas, n_alpha=6, max_iter
         if verbose:
             print("\tlog-likelihood = ", np.sum(LL_bp1))
 
-        # MBHP.print_model_param_kernel_sum(fit_param1)
+        # MBHP.print_mulch_param(fit_param1)
         # set new argument for next loop
         nodes_mem0 = nodes_mem1
         events_dict_bp0 = events_dict_bp1
@@ -142,11 +142,11 @@ def cal_new_LL_move_node(param_tup, T, idx, from_block, to_block, events_dict_bp
     """ calculate new per block_pair log-likelihoods of moving one node (idx) from one block to another """
     K = len(n_K)
     if len(param_tup) == 9:
-        mu_bp, alpha_n_bp, alpha_r_bp, alpha_br_bp, alpha_gr_bp, alpha_al_bp, alpha_alr_bp, C_bp, betas = param_tup
+        mu_bp, alpha_s_bp, alpha_r_bp, alpha_tc_bp, alpha_gr_bp, alpha_al_bp, alpha_alr_bp, C_bp, betas = param_tup
     elif len(param_tup) == 7:
-        mu_bp, alpha_n_bp, alpha_r_bp, alpha_br_bp, alpha_gr_bp, C_bp, betas = param_tup
+        mu_bp, alpha_s_bp, alpha_r_bp, alpha_tc_bp, alpha_gr_bp, C_bp, betas = param_tup
     else:
-        mu_bp, alpha_n_bp, alpha_r_bp, C_bp, betas = param_tup
+        mu_bp, alpha_s_bp, alpha_r_bp, C_bp, betas = param_tup
 
     # calculate events_dict_bp after moving node_i
     events_dict_bp1 = cal_new_event_dict_bp(idx, from_block, to_block, events_dict_bp, K)
@@ -164,27 +164,27 @@ def cal_new_LL_move_node(param_tup, T, idx, from_block, to_block, events_dict_bp
         for b in range(K):
             if a==from_block or a==to_block or b==from_block or b==to_block:
                 if len(param_tup) == 9:
-                    par = (mu_bp[a, b], alpha_n_bp[a, b], alpha_r_bp[a, b], alpha_br_bp[a, b], alpha_gr_bp[a, b], alpha_al_bp[a, b],
+                    par = (mu_bp[a, b], alpha_s_bp[a, b], alpha_r_bp[a, b], alpha_tc_bp[a, b], alpha_gr_bp[a, b], alpha_al_bp[a, b],
                            alpha_alr_bp[a, b], C_bp[a,b], betas)
                     if a == b:
-                        LL_bp1[a, b] = mulch_fit_bp.LL_6_alpha_dia_bp(par, events_dict_bp1[a][b], T, N_c1[b, 0], M_bp1[a, b])
+                        LL_bp1[a, b] = fit_bp.LL_6_alpha_dia_bp(par, events_dict_bp1[a][b], T, N_c1[b, 0], M_bp1[a, b])
                     else:
-                        LL_bp1[a, b] = mulch_fit_bp.LL_6_alpha_off_bp(par, (events_dict_bp1[a][b]), (events_dict_bp1[b][a]), T,
-                                                                      N_c1[b, 0], M_bp1[a, b])
+                        LL_bp1[a, b] = fit_bp.LL_6_alpha_off_bp(par, (events_dict_bp1[a][b]), (events_dict_bp1[b][a]), T,
+                                                                N_c1[b, 0], M_bp1[a, b])
                 elif len(param_tup) == 7:
-                    par = (mu_bp[a, b], alpha_n_bp[a, b], alpha_r_bp[a, b], alpha_br_bp[a, b], alpha_gr_bp[a, b], C_bp[a, b], betas)
+                    par = (mu_bp[a, b], alpha_s_bp[a, b], alpha_r_bp[a, b], alpha_tc_bp[a, b], alpha_gr_bp[a, b], C_bp[a, b], betas)
                     if a == b:
-                        LL_bp1[a, b] = mulch_fit_bp.LL_4_alpha_dia_bp(par, events_dict_bp1[a][b], T, N_c1[b, 0], M_bp1[a, b])
+                        LL_bp1[a, b] = fit_bp.LL_4_alpha_dia_bp(par, events_dict_bp1[a][b], T, N_c1[b, 0], M_bp1[a, b])
                     else:
-                        LL_bp1[a, b] = mulch_fit_bp.LL_4_alpha_off_bp(par, (events_dict_bp1[a][b]), (events_dict_bp1[b][a]), T,
-                                                                      N_c1[b, 0], M_bp1[a, b])
+                        LL_bp1[a, b] = fit_bp.LL_4_alpha_off_bp(par, (events_dict_bp1[a][b]), (events_dict_bp1[b][a]), T,
+                                                                N_c1[b, 0], M_bp1[a, b])
                 elif len(param_tup) == 5:
-                    par = (mu_bp[a, b], alpha_n_bp[a, b], alpha_r_bp[a, b], C_bp[a, b], betas)
+                    par = (mu_bp[a, b], alpha_s_bp[a, b], alpha_r_bp[a, b], C_bp[a, b], betas)
                     if a == b:
-                        LL_bp1[a, b] = mulch_fit_bp.LL_2_alpha_dia_bp(par, events_dict_bp1[a][b], T, N_c1[b, 0], M_bp1[a, b])
+                        LL_bp1[a, b] = fit_bp.LL_2_alpha_dia_bp(par, events_dict_bp1[a][b], T, N_c1[b, 0], M_bp1[a, b])
                     else:
-                        LL_bp1[a, b] = mulch_fit_bp.LL_2_alpha_off_bp(par, (events_dict_bp1[a][b]), (events_dict_bp1[b][a]), T,
-                                                                      N_c1[b, 0], M_bp1[a, b])
+                        LL_bp1[a, b] = fit_bp.LL_2_alpha_off_bp(par, (events_dict_bp1[a][b]), (events_dict_bp1[b][a]), T,
+                                                                N_c1[b, 0], M_bp1[a, b])
     if batch:
         return(np.sum(LL_bp1))
     else:
@@ -232,9 +232,9 @@ if __name__ == "__main__":
     # p = [1 / K] * K  # balanced node membership
     p = [0.70, 0.15, 0.15]
     mu_sim = np.array([[0.0001, 0.0001, 0.0001], [0.0003, 0.0003, 0.0003], [0.0003, 0.0001, 0.0003]])
-    alpha_n_sim = np.array([[0.03, 0.03, 0.02], [0.0, 0.1, 0.01], [0.0, 0.03, 0.1]])
+    alpha_s_sim = np.array([[0.03, 0.03, 0.02], [0.0, 0.1, 0.01], [0.0, 0.03, 0.1]])
     alpha_r_sim = np.array([[0.01, 0.05, 0.07], [0.01, 0.01, 0.01], [0.001, 0.0, 0.35]])
-    alpha_br_sim = np.array([[0.009, 0.001, 0.0001], [0.0, 0.07, 0.0006], [0.0001, 0.01, 0.05]])
+    alpha_tc_sim = np.array([[0.009, 0.001, 0.0001], [0.0, 0.07, 0.0006], [0.0001, 0.01, 0.05]])
     alpha_gr_sim = np.array([[0.001, 0.0, 0.0001], [0.0, 0.008, 0.0001], [0.0, 0.0002, 0.0]])
     alpha_al_sim = np.array([[0.001, 0.0001, 0.0], [0.0, 0.02, 0.0], [0.0001, 0.005, 0.01]])
     alpha_alr_sim = np.array([[0.001, 0.0001, 0.0001], [0.0, 0.001, 0.0006], [0.0001, 0.0, 0.003]])
@@ -242,15 +242,15 @@ if __name__ == "__main__":
     betas = np.array([0.01, 0.1, 20])
     # 1) simulate from 6-alpha sum of kernels model
     sim_param = (
-    mu_sim, alpha_n_sim, alpha_r_sim, alpha_br_sim, alpha_gr_sim, alpha_al_sim, alpha_alr_sim, C_sim, betas)
+    mu_sim, alpha_s_sim, alpha_r_sim, alpha_tc_sim, alpha_gr_sim, alpha_al_sim, alpha_alr_sim, C_sim, betas)
     betas = sim_param[-1]
     print(f"{n_alpha}-alpha Sum of Kernels model simultion at K={K}, N={N}, not balanced membership")
     print("betas = ", betas)
     events_dict, nodes_mem_true = simulate_mulch(sim_param, N, K, p, T_all)
-    n_events_all = mulch_fit_bp.cal_num_events(events_dict)
+    n_events_all = fit_bp.cal_num_events(events_dict)
     print("n_events simulated = ", n_events_all)
-    agg_adj = mulch_fit.event_dict_to_aggregated_adjacency(N, events_dict)
-    mulch_fit.plot_adj(agg_adj, nodes_mem_true, K, "True membership")
+    agg_adj = fit_model.event_dict_to_aggregated_adjacency(N, events_dict)
+    fit_model.plot_adj(agg_adj, nodes_mem_true, K, "True membership")
 
     MAX_ITER = 15
     fit_refinement_mulch(events_dict, N, T_all, K, betas, n_alpha, MAX_ITER, nodes_mem_true=nodes_mem_true,

@@ -1,98 +1,10 @@
+# TODO Delete
 import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 np.set_printoptions(suppress=True)
 
-#%% helper functions
-def plot_paramters(results_dict, n_alpha):
-    for key, i in zip(results_dict, range(n_alpha + 1)):
-        plt.figure()
-        plt.imshow(results_dict[key])
-        plt.colorbar()
-        plt.title(key)
-        plt.show()
 
-def plot_paramters2(param_tup, n_alpha):
-    param_name = ["mu", "alpha_self", "alpha_recip", "alpha_turn_cont", "alpha_generalized_recip",
-                  "alpha_allied_cont", "alpha_allied_recip"]
-    for param, i in zip(param_tup, range(n_alpha + 1)):
-        fig, ax = plt.subplots(figsize=(5, 4))
-        plot = ax.pcolor(param, cmap='gist_yarg')
-        ax.set_xticks(np.arange(0.5, 4))
-        ax.set_xticklabels(np.arange(1,5))
-        ax.set_yticks(np.arange(0.5, 4))
-        ax.set_yticklabels(np.arange(1, 5))
-        ax.invert_yaxis()
-        fig.colorbar(plot, ax=ax)
-        fig.tight_layout()
-        # ax.set_title(param_name[i])
-        fig.savefig(f"/shared/Results/MultiBlockHawkesModel/figures/MID_casestudy/{param_name[i]}.pdf")
-        plt.show()
-
-def plot_kernel(alpha, betas, C, time_range):
-    lambda_sum = []
-    for t in time_range:
-        lambda_sum.append(alpha * np.sum(betas * C * np.exp(-t * betas)))
-    plt.figure()
-    plt.plot(time_range, lambda_sum, color='red', label=f"betas1={betas}")
-    plt.xlabel("t(s)")
-    plt.ylabel("lambda(t)")
-    plt.yscale('log')
-    plt.title('sum of kernels C=[0.33, 0.33, 0.34] - y-log scale ')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
-
-def print_model_param_kernel_sum(params_est):
-    print("mu")
-    print(params_est[0])
-    print("\nalpha_n")
-    print(params_est[1])
-    print("\nalpha_r")
-    print(params_est[2])
-    classes = np.shape(params_est[0])[0]
-    if len(params_est) == 5:
-        print("\nC")
-        for i in range(classes):
-            for j in range(classes):
-                print(params_est[3][i, j, :], end='\t')
-            print(" ")
-    else:
-        print("\nalpha_br")
-        print(params_est[3])
-        print("\nalpha_gr")
-        print(params_est[4])
-        if len(params_est) == 7:
-            print("\nC")
-            for i in range(classes):
-                for j in range(classes):
-                    print(params_est[5][i, j, :], end='\t')
-                print(" ")
-        elif len(params_est) == 9:
-            print("\nalpha_al")
-            print(params_est[5])
-            print("\nalpha_alr")
-            print(params_est[6])
-            print("\nC")
-            for i in range(classes):
-                for j in range(classes):
-                    print(params_est[7][i, j, :], end='\t')
-                print(" ")
-
-def print_parameters(results_dict, n_alpha):
-    for key, i in zip(results_dict, range(n_alpha + 2)):
-        print(key)
-        print(results_dict[key])
-        print('')
-
-def analyze_block(node_mem, K, id_node_map):
-    print(np.histogram(node_mem, bins=K))
-    for i in range(K):
-        print(f"Class {i}")
-        nodes_in_class_i = np.where(node_mem == i)[0]
-        for id in nodes_in_class_i:
-            print(id_node_map[id], end=' ')
-        print()
 #%% tests
 
 if __name__ == "__main__":
@@ -366,7 +278,7 @@ if __name__ == "__main__":
     #         results_dict_s = pickle.load(f)
     #     # print(f"{results_dict_s['ll_train']:.3f}\t{results_dict_s['ll_all']:.3f}\t{results_dict_s['ll_test']:.3f}")
     #     print(f"K={k}:\ttrain={results_dict_s['ll_train']:.3f}\tall={results_dict_s['ll_all']:.3f}\ttest={results_dict_s['ll_test']:.3f}")
-    # plot_paramters2(results_dict_s["fit_param"], n_alpha=6)
+    # plot_mulch_param(results_dict_s["fit_param"], n_alpha=6)
 
 
 

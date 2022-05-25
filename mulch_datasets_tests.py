@@ -30,11 +30,11 @@ For each dataset, we can set the following variables:
 @author: Hadeel Soliman
 """
 
-# TODO add one beta fit function -- OR remove from MID
 # TODO change t0 array to random
 # TODO link prediction is only for n_alpha=6
 # TODO remove saved motif from dataset
 # TODO should I remove the filtered facebook dataset
+# TODO add fb-forum
 # TODO motif and link experiments are only for reality and enron
 
 import matplotlib.pyplot as plt
@@ -42,12 +42,10 @@ import numpy as np
 import pickle
 import os
 import sys
-
-import utils_fit_model as mulch_fit
-import utils_accuracy_tests as accuracy_test
+import utils_fit_model as fit_model
+import utils_accuracy_tests as accuracy_tests
 from utils_fit_refine_mulch import fit_refinement_mulch
-from utils_fit_bp import cal_num_events
-from utils_fit_one_beta_model import model_fit_cal_log_likelihood_one_beta
+
 
 sys.path.append("./CHIP-Network-Model")
 from dataset_utils import load_enron_train_test, load_reality_mining_test_train, get_node_map, load_facebook_wall
@@ -67,7 +65,7 @@ if __name__ == "__main__":
     PRINT_DETAILS = True   # print intermediate details of fitting and other test experiments
 
     """ Model Fitting"""
-    fit_model = True  # either fit mulch or read saved fit
+    FIT_MODEL = True  # either fit mulch or read saved fit
     K_range = [2]  # number of blocks (K) range ex: range(1,11)
     n_alpha = 6  # number of excitations types choose between 2, 4, or 6
     save_fit = False  # save fitted model - specify path
@@ -116,7 +114,7 @@ if __name__ == "__main__":
     else:
         facebook_path = os.path.join(os.getcwd(), "storage", "datasets", "facebook_filtered",
                                      "facebook-wall-filtered.txt")
-        train_tup, all_tup, nodes_not_in_train = mulch_fit.read_csv_split_train(facebook_path, delimiter=' ')
+        train_tup, all_tup, nodes_not_in_train = fit_model.read_csv_split_train(facebook_path, delimiter=' ')
         events_dict_train, n_nodes_train, end_time_train, n_events_train, id_node_map_train = train_tup
         events_dict_all, n_nodes_all, end_time_all, n_events_all, id_node_map_all = all_tup
         days = (1196972372 - 1168985687) / 60 / 60 / 24  # dataset lasted for (324 days)
@@ -129,16 +127,16 @@ if __name__ == "__main__":
     if len(K_range) > 0:
         print(f"Fit {dataset} using {n_alpha}-alpha MULCH at betas={betas}, max #refinement iterations={REF_ITER}")
     for K in K_range:
-        if fit_model:
+        if FIT_MODEL:
             print("\nFit MULCH at K=", K)
             sp_tup, ref_tup, ref_message = fit_refinement_mulch(events_dict_train, n_nodes_train, end_time_train, K,
-                                                                betas, n_alpha, max_iter=REF_ITER, verbose=PRINT_DETAILS)
+                                                                betas, n_alpha, max_ref_iter=REF_ITER, verbose=PRINT_DETAILS)
 
             # Fit results using spectral clustering for node membership
             nodes_mem_train_sp, fit_param_sp, ll_train_sp, n_events_train, fit_time_sp = sp_tup
             # full dataset nodes membership
-            node_mem_all_sp = mulch_fit.assign_node_membership_for_missing_nodes(nodes_mem_train_sp, nodes_not_in_train)
-            ll_all_sp, n_events_all = mulch_fit.log_likelihood_mulch(fit_param_sp, events_dict_all, node_mem_all_sp, K,
+            node_mem_all_sp = fit_model.assign_node_membership_for_missing_nodes(nodes_mem_train_sp, nodes_not_in_train)
+            ll_all_sp, n_events_all = fit_model.log_likelihood_mulch(fit_param_sp, events_dict_all, node_mem_all_sp, K,
                                                                      end_time_all)
             # train, full, test log-likelihoods per event
             ll_train_event_sp = ll_train_sp / n_events_train
@@ -148,9 +146,9 @@ if __name__ == "__main__":
             # Fit results after nodes membership refinement iterations
             nodes_mem_train_ref, fit_param_ref, ll_train_ref, num_events, fit_time_ref = ref_tup
             # full dataset nodes membership
-            nodes_mem_all_ref = mulch_fit.assign_node_membership_for_missing_nodes(nodes_mem_train_ref,
+            nodes_mem_all_ref = fit_model.assign_node_membership_for_missing_nodes(nodes_mem_train_ref,
                                                                                    nodes_not_in_train)
-            ll_all_ref, n_events_all = mulch_fit.log_likelihood_mulch(fit_param_ref, events_dict_all, nodes_mem_all_ref,
+            ll_all_ref, n_events_all = fit_model.log_likelihood_mulch(fit_param_ref, events_dict_all, nodes_mem_all_ref,
                                                                       K, end_time_all)
             # train, full, test log-likelihoods per event
             ll_all_event_ref = ll_all_ref / n_events_all
@@ -235,9 +233,9 @@ if __name__ == "__main__":
             dataset_motif_tup = (recip, trans, dataset_motif, n_events_train)
 
             # run simulation and count motifs
-            motif_test_dict = accuracy_test.simulate_count_motif_experiment(dataset_motif_tup, fit_param_ref, nodes_mem_train_ref,
-                                                              K, end_time_train, motif_delta, n_sim=n_motif_simulations,
-                                                              verbose=PRINT_DETAILS)
+            motif_test_dict = accuracy_tests.simulate_count_motif_experiment(dataset_motif_tup, fit_param_ref, nodes_mem_train_ref,
+                                                                             K, end_time_train, motif_delta, n_sim=n_motif_simulations,
+                                                                             verbose=PRINT_DETAILS)
             print("\n->actual dataset motifs count at delta=", motif_delta)
             print(np.asarray(motif_test_dict["dataset_motif"], dtype=int))
             print("->average motifs count over ", n_motif_simulations, " simulations")
@@ -261,11 +259,11 @@ if __name__ == "__main__":
             pred_runs = np.zeros((n_nodes_all, n_nodes_all, runs))
             for i, t0 in enumerate(t0s):
                 # t0 = np.random.uniform(low=end_time_train, high=end_time_all - delta, size=None)
-                y_mulch, pred_mulch = accuracy_test.mulch_predict_probs_and_actual(n_nodes_all, t0, link_pred_delta,
-                                                                     events_dict_all, fit_param_ref, nodes_mem_all_ref)
+                y_mulch, pred_mulch = accuracy_tests.mulch_predict_probs_and_actual(n_nodes_all, t0, link_pred_delta,
+                                                                                    events_dict_all, fit_param_ref, nodes_mem_all_ref)
                 y_runs[:, :, i] = y_mulch
                 pred_runs[:, :, i] = pred_mulch
-                auc[i] = accuracy_test.calculate_auc(y_mulch, pred_mulch, show_figure=False)
+                auc[i] = accuracy_tests.calculate_auc(y_mulch, pred_mulch, show_figure=False)
                 if PRINT_DETAILS:
                     print(f"at i={i} -> auc={auc[i]}")
             print(f"->average AUC={np.average(auc):.5f}, std={auc.std():.3f}")

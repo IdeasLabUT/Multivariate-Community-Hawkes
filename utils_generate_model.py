@@ -26,11 +26,11 @@ def simulate_mulch(sim_param, n_nodes, n_classes, p, duration):
         (nodes_membership): (n,) array of block membership of each node.
     """
     if len(sim_param) == 5:
-        mu_sim, alpha_n_sim, alpha_r_sim, C_sim, betas_sim = sim_param
+        mu_sim, alpha_s_sim, alpha_r_sim, C_sim, betas_sim = sim_param
     elif len(sim_param) == 7:
-        mu_sim, alpha_n_sim, alpha_r_sim, alpha_br_sim, alpha_gr_sim, C_sim , betas_sim = sim_param
+        mu_sim, alpha_s_sim, alpha_r_sim, alpha_tc_sim, alpha_gr_sim, C_sim , betas_sim = sim_param
     elif len(sim_param) == 9:
-        mu_sim, alpha_n_sim, alpha_r_sim, alpha_br_sim, alpha_gr_sim, alpha_al_sim, alpha_alr_sim, C_sim , betas_sim = sim_param
+        mu_sim, alpha_s_sim, alpha_r_sim, alpha_tc_sim, alpha_gr_sim, alpha_al_sim, alpha_alr_sim, C_sim , betas_sim = sim_param
     # list (n_classes) elements, each element is array of nodes that belong to same class
     nodes_list = list(range(n_nodes))
     random.shuffle(nodes_list)
@@ -46,28 +46,28 @@ def simulate_mulch(sim_param, n_nodes, n_classes, p, duration):
                 # blocks with only one node have 0 processes
                 if len(class_nodes_list[i]) > 1:
                     if len(sim_param) == 5:
-                        par = (mu_sim[i, j], alpha_n_sim[i, j], alpha_r_sim[i, j], C_sim[i, j], betas_sim)
+                        par = (mu_sim[i, j], alpha_s_sim[i, j], alpha_r_sim[i, j], C_sim[i, j], betas_sim)
                     elif len(sim_param) == 7:
-                        par = (mu_sim[i, j], alpha_n_sim[i, j], alpha_r_sim[i, j], alpha_br_sim[i, j], alpha_gr_sim[i, j],
+                        par = (mu_sim[i, j], alpha_s_sim[i, j], alpha_r_sim[i, j], alpha_tc_sim[i, j], alpha_gr_sim[i, j],
                            np.array(C_sim[i, j]), betas_sim)
                     elif len(sim_param) == 9:
-                        par = (mu_sim[i, j], alpha_n_sim[i, j], alpha_r_sim[i, j], alpha_br_sim[i, j], alpha_gr_sim[i, j],
+                        par = (mu_sim[i, j], alpha_s_sim[i, j], alpha_r_sim[i, j], alpha_tc_sim[i, j], alpha_gr_sim[i, j],
                            alpha_al_sim[i, j], alpha_alr_sim[i, j], np.array(C_sim[i, j]), betas_sim)
                     events_dict = simulate_dia_bp(par, list(class_nodes_list[i]), duration)
                     events_dict_all.update(events_dict)
             elif i < j:
                 if len(sim_param) == 5:
-                    par_ab = (mu_sim[i, j], alpha_n_sim[i, j], alpha_r_sim[i, j], C_sim[i, j], betas_sim)
-                    par_ba = (mu_sim[j, i], alpha_n_sim[j, i], alpha_r_sim[j, i], C_sim[j, i], betas_sim)
+                    par_ab = (mu_sim[i, j], alpha_s_sim[i, j], alpha_r_sim[i, j], C_sim[i, j], betas_sim)
+                    par_ba = (mu_sim[j, i], alpha_s_sim[j, i], alpha_r_sim[j, i], C_sim[j, i], betas_sim)
                 elif len(sim_param) == 7:
-                    par_ab = (mu_sim[i, j], alpha_n_sim[i, j], alpha_r_sim[i, j], alpha_br_sim[i, j], alpha_gr_sim[i, j],
+                    par_ab = (mu_sim[i, j], alpha_s_sim[i, j], alpha_r_sim[i, j], alpha_tc_sim[i, j], alpha_gr_sim[i, j],
                               np.array(C_sim[i, j]), betas_sim)
-                    par_ba = (mu_sim[j, i], alpha_n_sim[j, i], alpha_r_sim[j, i], alpha_br_sim[j, i], alpha_gr_sim[j, i],
+                    par_ba = (mu_sim[j, i], alpha_s_sim[j, i], alpha_r_sim[j, i], alpha_tc_sim[j, i], alpha_gr_sim[j, i],
                               np.array(C_sim[j, i]) ,betas_sim)
                 elif len(sim_param) == 9:
-                    par_ab = (mu_sim[i, j], alpha_n_sim[i, j], alpha_r_sim[i, j], alpha_br_sim[i, j], alpha_gr_sim[i, j],
+                    par_ab = (mu_sim[i, j], alpha_s_sim[i, j], alpha_r_sim[i, j], alpha_tc_sim[i, j], alpha_gr_sim[i, j],
                               alpha_al_sim[i, j], alpha_alr_sim[i, j], np.array(C_sim[i, j]), betas_sim)
-                    par_ba = (mu_sim[j, i], alpha_n_sim[j, i], alpha_r_sim[j, i], alpha_br_sim[j, i], alpha_gr_sim[j, i],
+                    par_ba = (mu_sim[j, i], alpha_s_sim[j, i], alpha_r_sim[j, i], alpha_tc_sim[j, i], alpha_gr_sim[j, i],
                               alpha_al_sim[j, i], alpha_alr_sim[j, i], np.array(C_sim[j, i]) ,betas_sim)
                 d_ab, d_ba = simulate_off_bp(par_ab, par_ba, list(class_nodes_list[i]), list(class_nodes_list[j]),
                                              duration)
@@ -80,7 +80,7 @@ def simulate_dia_bp(par, a_nodes, duration, return_list=False):
     """
     simulate one MULCH diagonal block pair (a, b) (i.e. a=b)
 
-    :param tuple par: block pair parameters (mu, alphas_1, .., alpha_n, C, betas)
+    :param tuple par: block pair parameters (mu, alphas_1, .., alpha_s, C, betas)
     :param a_nodes: array of ids of nodes in block (a).
     :param duration: network's duration (T)
     :param return_list: only used for additional functionality checking
@@ -109,8 +109,8 @@ def simulate_off_bp(par_ab, par_ba, a_nodes, b_nodes, duration, return_list=Fals
     """
     simulate two MULCH off-diagonal block pairs (a, b) & (b, a) , where a != b
 
-    :param tuple par_ab: block pair (a, b) parameters (mu, alphas_1, .., alpha_n, C, betas)
-    :param tuple par_ba: block pair (b, a) parameters (mu, alphas_1, .., alpha_n, C, betas)
+    :param tuple par_ab: block pair (a, b) parameters (mu, alphas_1, .., alpha_s, C, betas)
+    :param tuple par_ba: block pair (b, a) parameters (mu, alphas_1, .., alpha_s, C, betas)
     :param a_nodes: array of ids of nodes in block (a).
     :param b_nodes: array of ids of nodes in block (b).
     :param duration: network's duration (T)
@@ -150,9 +150,9 @@ def get_6_alphas_matrix_dia_bp(alphas, n_a):
     :return: (m, m) excitation matrix
     """
 
-    alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr = alphas
-    # add alpha_n, alpha_br to alpha_matrix
-    block = (np.ones((n_a - 1, n_a - 1)) - np.identity(n_a - 1)) * alpha_br + np.identity(n_a - 1) * alpha_n
+    alpha_s, alpha_r, alpha_tc, alpha_gr, alpha_al, alpha_alr = alphas
+    # add alpha_s, alpha_tc to alpha_matrix
+    block = (np.ones((n_a - 1, n_a - 1)) - np.identity(n_a - 1)) * alpha_tc + np.identity(n_a - 1) * alpha_s
     alpha_matrix = np.kron(np.eye(n_a), block)
     np_list = get_np_dia_list(n_a)
     # loop through node pairs in block pair (a1, b1)
@@ -183,8 +183,8 @@ def get_6_alphas_matrix_off_bp(alphas_ab, alphas_ba, n_a, n_b):
     :param n_b: number of nodes in block (b)
     :return: (2m, 2m) excitation matrix
     """
-    alpha_n_ab, alpha_r_ab, alpha_br_ab, alpha_gr_ab, alpha_al_ab, alpha_alr_ab = alphas_ab
-    alpha_n_ba, alpha_r_ba, alpha_br_ba, alpha_gr_ba, alpha_al_ba, alpha_alr_ba = alphas_ba
+    alpha_s_ab, alpha_r_ab, alpha_tc_ab, alpha_gr_ab, alpha_al_ab, alpha_alr_ab = alphas_ab
+    alpha_s_ba, alpha_r_ba, alpha_tc_ba, alpha_gr_ba, alpha_al_ba, alpha_alr_ba = alphas_ba
     M_ab = n_a * n_b
     # alpha_matrix (2M_ab , 2M_ab)
     alpha_matrix = np.zeros((2*M_ab , 2*M_ab))
@@ -193,15 +193,15 @@ def get_6_alphas_matrix_off_bp(alphas_ab, alphas_ba, n_a, n_b):
     for from_idx, (i, j) in enumerate(np_list[:M_ab]):
         # loop through all node pairs
         for to_idx, (x, y) in enumerate(np_list):
-            # alpha_n
+            # alpha_s
             if (i, j) == (x, y):
-                alpha_matrix[from_idx, to_idx] = alpha_n_ab
+                alpha_matrix[from_idx, to_idx] = alpha_s_ab
             # alpha_r
             elif (i, j) == (y, x):
                 alpha_matrix[from_idx, to_idx] = alpha_r_ab
-            # alpha_br
+            # alpha_tc
             elif i==x:
-                alpha_matrix[from_idx, to_idx] = alpha_br_ab
+                alpha_matrix[from_idx, to_idx] = alpha_tc_ab
             # alpha_gr
             elif i==y:
                 alpha_matrix[from_idx, to_idx] = alpha_gr_ab
@@ -215,15 +215,15 @@ def get_6_alphas_matrix_off_bp(alphas_ab, alphas_ba, n_a, n_b):
     for from_idx, (i, j) in enumerate(np_list[M_ab:], M_ab):
         # loop through all node pairs
         for to_idx, (x, y) in enumerate(np_list):
-            # alpha_n
+            # alpha_s
             if (i, j) == (x, y):
-                alpha_matrix[from_idx, to_idx] = alpha_n_ba
+                alpha_matrix[from_idx, to_idx] = alpha_s_ba
             # alpha_r
             elif (i, j) == (y, x):
                 alpha_matrix[from_idx, to_idx] = alpha_r_ba
-            # alpha_br
+            # alpha_tc
             elif i==x:
-                alpha_matrix[from_idx, to_idx] = alpha_br_ba
+                alpha_matrix[from_idx, to_idx] = alpha_tc_ba
             # alpha_gr
             elif i==y:
                 alpha_matrix[from_idx, to_idx] = alpha_gr_ba
@@ -244,9 +244,9 @@ def get_4_alphas_matrix_dia_bp(alphas, n_nodes):
     :return: (m, m) excitation matrix
     """
 
-    alpha_n, alpha_r, alpha_br, alpha_gr = alphas
+    alpha_s, alpha_r, alpha_tc, alpha_gr = alphas
     nodes_set = set(np.arange(n_nodes))  # set of nodes
-    block = (np.ones((n_nodes - 1, n_nodes - 1)) - np.identity(n_nodes - 1)) * alpha_br + np.identity(n_nodes - 1) * alpha_n
+    block = (np.ones((n_nodes - 1, n_nodes - 1)) - np.identity(n_nodes - 1)) * alpha_tc + np.identity(n_nodes - 1) * alpha_s
     alpha_matrix = np.kron(np.eye(n_nodes), block)
     # add alpha_r , alpha_gr parameters assuming node are ordered
     for u in range(n_nodes):
@@ -267,12 +267,12 @@ def get_4_alphas_matrix_off_bp(alphas_ab, alphas_ba, n_nodes_a, n_nodes_b):
     :return: (2m, 2m) excitation matrix
     """
     M = n_nodes_a * n_nodes_b  # number of nodes pair per block pair
-    alpha_n_ab, alpha_r_ab, alpha_br_ab, alpha_gr_ab = alphas_ab
-    alpha_n_ba, alpha_r_ba, alpha_br_ba, alpha_gr_ba = alphas_ba
+    alpha_s_ab, alpha_r_ab, alpha_tc_ab, alpha_gr_ab = alphas_ab
+    alpha_s_ba, alpha_r_ba, alpha_tc_ba, alpha_gr_ba = alphas_ba
     ### alpha matrix (2M,2M)
     # alpha ab-ab
-    block = (np.ones((n_nodes_b, n_nodes_b)) - np.identity(n_nodes_b)) * alpha_br_ab + np.identity(
-        n_nodes_b) * alpha_n_ab
+    block = (np.ones((n_nodes_b, n_nodes_b)) - np.identity(n_nodes_b)) * alpha_tc_ab + np.identity(
+        n_nodes_b) * alpha_s_ab
     alpha_matrix_ab_ab = np.kron(np.eye(n_nodes_a), block)
     # alpha ab-ba
     alpha_matrix_ab_ba = np.zeros((M, M))
@@ -289,8 +289,8 @@ def get_4_alphas_matrix_off_bp(alphas_ab, alphas_ba, n_nodes_a, n_nodes_b):
         for a in range(n_nodes_b):
             alpha_matrix_ba_ab[a * n_nodes_a:(a + 1) * n_nodes_a, a + b * n_nodes_b] = col
     # alpha ba-ba
-    block = (np.ones((n_nodes_a, n_nodes_a)) - np.identity(n_nodes_a)) * alpha_br_ba + np.identity(
-        n_nodes_a) * alpha_n_ba
+    block = (np.ones((n_nodes_a, n_nodes_a)) - np.identity(n_nodes_a)) * alpha_tc_ba + np.identity(
+        n_nodes_a) * alpha_s_ba
     alpha_matrix_ba_ba = np.kron(np.eye(n_nodes_b), block)
     alpha_matrix = np.vstack(
         (np.hstack((alpha_matrix_ab_ab, alpha_matrix_ab_ba)), np.hstack((alpha_matrix_ba_ab, alpha_matrix_ba_ba))))
@@ -305,8 +305,8 @@ def get_2_alphas_matrix_dia_bp(alphas, n_nodes):
     :return: (m, m) excitation matrix
     """
 
-    alpha_n, alpha_r = alphas
-    block = np.identity(n_nodes - 1) * alpha_n
+    alpha_s, alpha_r = alphas
+    block = np.identity(n_nodes - 1) * alpha_s
     alpha_matrix = np.kron(np.eye(n_nodes), block)
     # add alpha_r assuming node are ordered
     for u in range(n_nodes):
@@ -324,12 +324,12 @@ def get_2_alphas_matrix_off_bp(alphas_ab, alphas_ba, n_nodes_a, n_nodes_b):
     :return: (2m, 2m) excitation matrix
     """
     M = n_nodes_a * n_nodes_b  # number of processes
-    alpha_n_ab, alpha_r_ab = alphas_ab
-    alpha_n_ba, alpha_r_ba = alphas_ba
+    alpha_s_ab, alpha_r_ab = alphas_ab
+    alpha_s_ba, alpha_r_ba = alphas_ba
 
     ### alpha matrix (2M,2M)
     # alpha ab-ab
-    alpha_matrix_ab_ab = np.identity(M) * alpha_n_ab
+    alpha_matrix_ab_ab = np.identity(M) * alpha_s_ab
     # alpha ab-ba
     alpha_matrix_ab_ba = np.zeros((M, M))
     for a in range(n_nodes_b):
@@ -345,7 +345,7 @@ def get_2_alphas_matrix_off_bp(alphas_ab, alphas_ba, n_nodes_a, n_nodes_b):
         for a in range(n_nodes_b):
             alpha_matrix_ba_ab[a * n_nodes_a:(a + 1) * n_nodes_a, a + b * n_nodes_b] = col
     # alpha ba-ba
-    alpha_matrix_ba_ba = np.identity(M) * alpha_n_ba
+    alpha_matrix_ba_ba = np.identity(M) * alpha_s_ba
     # combine four alpha_matrix
     alpha_matrix = np.vstack(
         (np.hstack((alpha_matrix_ab_ab, alpha_matrix_ab_ba)), np.hstack((alpha_matrix_ba_ab, alpha_matrix_ba_ba))))

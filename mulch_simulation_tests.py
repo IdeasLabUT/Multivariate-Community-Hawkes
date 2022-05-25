@@ -16,15 +16,17 @@ This file contains the following functions - more details in functions docstring
 # TODO fix simulation parameters and make sure all prints are consistent and save files also
 # TODO figure out which parameters to delete
 # TODO remove save file option in functions
+# TODO do I want to plot results?
 
 import numpy as np
 import pickle
-import utils_fit_model as mulch_fit
+import matplotlib.pyplot as plt
+from sklearn.metrics import adjusted_rand_score
+import utils_fit_model as fit_model
 from utils_generate_model import simulate_mulch
 from utils_fit_refine_mulch import fit_refinement_mulch
 from utils_fit_bp import cal_num_events
-import matplotlib.pyplot as plt
-from sklearn.metrics import adjusted_rand_score
+
 
 
 
@@ -56,14 +58,14 @@ def get_simulation_params(n_classes, level, n_alpha, sum):
         mu_sim = np.ones((n_classes, n_classes)) * theta_off[0]
         mu_sim[np.diag_indices_from(mu_sim)] = theta_dia[0]
 
-        alpha_n_sim = np.ones((n_classes, n_classes)) * theta_off[1]
-        alpha_n_sim[np.diag_indices_from(mu_sim)] = theta_dia[1]
+        alpha_s_sim = np.ones((n_classes, n_classes)) * theta_off[1]
+        alpha_s_sim[np.diag_indices_from(mu_sim)] = theta_dia[1]
 
         alpha_r_sim = np.ones((n_classes, n_classes)) * theta_off[2]
         alpha_r_sim[np.diag_indices_from(mu_sim)] = theta_dia[2]
 
-        alpha_br_sim = np.ones((n_classes, n_classes)) * theta_off[3]
-        alpha_br_sim[np.diag_indices_from(mu_sim)] = theta_dia[3]
+        alpha_tc_sim = np.ones((n_classes, n_classes)) * theta_off[3]
+        alpha_tc_sim[np.diag_indices_from(mu_sim)] = theta_dia[3]
 
         alpha_gr_sim = np.ones((n_classes, n_classes)) * theta_off[4]
         alpha_gr_sim[np.diag_indices_from(mu_sim)] = theta_dia[4]
@@ -76,7 +78,7 @@ def get_simulation_params(n_classes, level, n_alpha, sum):
         C_sim = np.array([[[0.33, 0.33, 0.34]] * n_classes for _ in range(n_classes)])
         betas_recip = np.array([7 * 2, 1, 1 / 12])  # [2week, 1day, 2hour]
         betas = np.reciprocal(betas_recip)
-        param = (mu_sim, alpha_n_sim, alpha_r_sim, alpha_br_sim, alpha_gr_sim, alpha_al_sim, alpha_alr_sim, C_sim, betas)
+        param = (mu_sim, alpha_s_sim, alpha_r_sim, alpha_tc_sim, alpha_gr_sim, alpha_al_sim, alpha_alr_sim, C_sim, betas)
     # TODO dont delete
     elif (n_classes == 4 and level == 1000 and n_alpha==6 and sum == True):
         theta_dia = [0.0002, 0.3, 0.3, 0.004, 0.001, 0.003, 0.001]
@@ -88,14 +90,14 @@ def get_simulation_params(n_classes, level, n_alpha, sum):
         mu_sim = np.ones((n_classes, n_classes)) * theta_off[0]
         mu_sim[np.diag_indices_from(mu_sim)] = theta_dia[0]
 
-        alpha_n_sim = np.ones((n_classes, n_classes)) * theta_off[1]
-        alpha_n_sim[np.diag_indices_from(mu_sim)] = theta_dia[1]
+        alpha_s_sim = np.ones((n_classes, n_classes)) * theta_off[1]
+        alpha_s_sim[np.diag_indices_from(mu_sim)] = theta_dia[1]
 
         alpha_r_sim = np.ones((n_classes, n_classes)) * theta_off[2]
         alpha_r_sim[np.diag_indices_from(mu_sim)] = theta_dia[2]
 
-        alpha_br_sim = np.ones((n_classes, n_classes)) * theta_off[3]
-        alpha_br_sim[np.diag_indices_from(mu_sim)] = theta_dia[3]
+        alpha_tc_sim = np.ones((n_classes, n_classes)) * theta_off[3]
+        alpha_tc_sim[np.diag_indices_from(mu_sim)] = theta_dia[3]
 
         alpha_gr_sim = np.ones((n_classes, n_classes)) * theta_off[4]
         alpha_gr_sim[np.diag_indices_from(mu_sim)] = theta_dia[4]
@@ -106,7 +108,7 @@ def get_simulation_params(n_classes, level, n_alpha, sum):
         alpha_alr_sim = np.ones((n_classes, n_classes)) * theta_off[6]
         alpha_alr_sim[np.diag_indices_from(mu_sim)] = theta_dia[6]
         betas = np.reciprocal(betas_recip)
-        param = (mu_sim, alpha_n_sim, alpha_r_sim, alpha_br_sim, alpha_gr_sim, alpha_al_sim, alpha_alr_sim, C_sim, betas)
+        param = (mu_sim, alpha_s_sim, alpha_r_sim, alpha_tc_sim, alpha_gr_sim, alpha_al_sim, alpha_alr_sim, C_sim, betas)
     # TODO dont delete
     elif (n_classes == 4 and level == 100 and n_alpha==6 and sum == True):
         theta_dia = [0.0002, 0.3, 0.3, 0.004, 0.001, 0.003, 0.001]
@@ -115,14 +117,14 @@ def get_simulation_params(n_classes, level, n_alpha, sum):
         mu_sim = np.ones((n_classes, n_classes)) * theta_off[0]
         mu_sim[np.diag_indices_from(mu_sim)] = theta_dia[0]
 
-        alpha_n_sim = np.ones((n_classes, n_classes)) * theta_off[1]
-        alpha_n_sim[np.diag_indices_from(mu_sim)] = theta_dia[1]
+        alpha_s_sim = np.ones((n_classes, n_classes)) * theta_off[1]
+        alpha_s_sim[np.diag_indices_from(mu_sim)] = theta_dia[1]
 
         alpha_r_sim = np.ones((n_classes, n_classes)) * theta_off[2]
         alpha_r_sim[np.diag_indices_from(mu_sim)] = theta_dia[2]
 
-        alpha_br_sim = np.ones((n_classes, n_classes)) * theta_off[3]
-        alpha_br_sim[np.diag_indices_from(mu_sim)] = theta_dia[3]
+        alpha_tc_sim = np.ones((n_classes, n_classes)) * theta_off[3]
+        alpha_tc_sim[np.diag_indices_from(mu_sim)] = theta_dia[3]
 
         alpha_gr_sim = np.ones((n_classes, n_classes)) * theta_off[4]
         alpha_gr_sim[np.diag_indices_from(mu_sim)] = theta_dia[4]
@@ -136,35 +138,35 @@ def get_simulation_params(n_classes, level, n_alpha, sum):
         betas_recip = np.array([7 * 2, 1, 1 / 12])  # [2week, 1day, 2hour]
         betas = np.reciprocal(betas_recip)
         param = (
-        mu_sim, alpha_n_sim, alpha_r_sim, alpha_br_sim, alpha_gr_sim, alpha_al_sim, alpha_alr_sim, C_sim, betas)
+        mu_sim, alpha_s_sim, alpha_r_sim, alpha_tc_sim, alpha_gr_sim, alpha_al_sim, alpha_alr_sim, C_sim, betas)
     elif (n_classes == 3 and level == 1 and n_alpha==6 and sum == False):
         # simulation parameters
         mu_sim = np.array([[0.0005, 0.0005, 0.0004],
                            [0.0003, 0.0008, 0.0003],
                            [0.0003, 0.0004, 0.0007]])
-        alpha_n_sim = np.array([[0.01, 0.03, 0.02],
+        alpha_s_sim = np.array([[0.01, 0.03, 0.02],
                                 [0.0, 0.3, 0.01],
                                 [0.0, 0.03, 0.1]])
         alpha_r_sim = np.array([[0.1, 0.05, 0.07],
                                 [0.01, 0.001, 0.01],
                                 [0.001, 0.0, 0.05]])
-        alpha_br_sim = np.array([[0.002, 0.0005, 0.0001], [0.0, 0.005, 0.0006], [0.0001, 0.0009, 0.03]])
+        alpha_tc_sim = np.array([[0.002, 0.0005, 0.0001], [0.0, 0.005, 0.0006], [0.0001, 0.0009, 0.03]])
         alpha_gr_sim = np.array([[0.001, 0.0, 0.0001], [0.0, 0.008, 0.0001], [0.0, 0.0002, 0.0]])
         alpha_al_sim = np.array([[0.001, 0.0001, 0.0], [0.0, 0.002, 0.0], [0.0001, 0.0007, 0.001]])
         alpha_alr_sim = np.array([[0.003, 0.0001, 0.0001], [0.0, 0.001, 0.0006], [0.0001, 0.0, 0.003]])
         beta = 1
-        param = (mu_sim, alpha_n_sim, alpha_r_sim, alpha_br_sim, alpha_gr_sim, alpha_al_sim, alpha_alr_sim, beta)
+        param = (mu_sim, alpha_s_sim, alpha_r_sim, alpha_tc_sim, alpha_gr_sim, alpha_al_sim, alpha_alr_sim, beta)
     elif (n_classes == 4 and level == 1 and n_alpha==6 and sum == True):
         # simulation parameters
         mu_sim = np.array([[0.0005, 0.0001, 0.0001, 0.0001],
                            [0.0001, 0.0004, 0.0001, 0.00001],
                            [0.0001, 0.0001, 0.0003, 0.00005],
                            [0.00001, 0.0001, 0.0001, 0.0002]])
-        alpha_n_sim = np.array([[0.4, 0.09, 0.03, 0.0],[0.01, 0.25, 0.01, 0.009],
+        alpha_s_sim = np.array([[0.4, 0.09, 0.03, 0.0],[0.01, 0.25, 0.01, 0.009],
                                 [0.03, 0.03, 0.1, 0.0],[0.0, 0.0, 0.02, 0.01]])
         alpha_r_sim = np.array([[0.1, 0.05, 0.02, 0.01],[0.01, 0.25, 0.01, 0.01],
                                 [0.03, 0.03, 0.4, 0.0],[0.0, 0.0, 0.01, 0.1]])
-        alpha_br_sim = np.array([[0.002, 0.0001, 0.001, 0.0001],
+        alpha_tc_sim = np.array([[0.002, 0.0001, 0.001, 0.0001],
                                  [0.0001, 0.0002, 0.0007, 0.0003],
                                  [0.0001, 0.0002, 0.003, 0.001],
                                  [0.0, 0.0, 0.0, 0.001]])
@@ -180,7 +182,7 @@ def get_simulation_params(n_classes, level, n_alpha, sum):
                                   [0.001, 0.0001, 0.0, 0.0001], [0.0, 0.0, 0.0, 0.0001]])
         C_sim = np.array([[[0.33, 0.33, 0.34]] * n_classes for _ in range(n_classes)])
         betas = np.array([0.02, 0.6, 20])
-        param = (mu_sim, alpha_n_sim, alpha_r_sim, alpha_br_sim, alpha_gr_sim, alpha_al_sim, alpha_alr_sim, C_sim, betas)
+        param = (mu_sim, alpha_s_sim, alpha_r_sim, alpha_tc_sim, alpha_gr_sim, alpha_al_sim, alpha_alr_sim, C_sim, betas)
     return param
 
 #%% simulation accuracy tests
@@ -217,10 +219,10 @@ def spectral_clustering_accuracy(n_run = 10, verbose=False, file_name=None):
             for it in range(n_run):
                 events_dict, node_mem_true = simulate_mulch(sim_param, N, K, percent, T)
                 n_events = cal_num_events(events_dict)
-                agg_adj = mulch_fit.event_dict_to_aggregated_adjacency(N, events_dict)
+                agg_adj = fit_model.event_dict_to_aggregated_adjacency(N, events_dict)
                 # if it == 0 and verbose:
                 #     mulch_fit.plot_adj(agg_adj, node_mem_true, K, f"N={N}, T={T}")
-                node_mem_spectral = mulch_fit.spectral_cluster1(agg_adj, K, n_kmeans_init=500, normalize_z=True,
+                node_mem_spectral = fit_model.spectral_cluster1(agg_adj, K, n_kmeans_init=500, normalize_z=True,
                                                                 multiply_s=True)
                 rand_i = adjusted_rand_score(node_mem_true, node_mem_spectral)
                 if verbose:
@@ -282,18 +284,18 @@ def parameters_estimation_MSE(fixed_n=True, n_run = 10, verbose=False, file_name
 
     # hold parameter's average MSE for range of (n) and (T)
     mMSE_mu = np.zeros((len(n_range), len(T_range)))
-    mMSE_alpha_n = np.zeros((len(n_range), len(T_range)))
+    mMSE_alpha_s = np.zeros((len(n_range), len(T_range)))
     mMSE_alpha_r = np.zeros((len(n_range), len(T_range)))
-    mMSE_alpha_br = np.zeros((len(n_range), len(T_range)))
+    mMSE_alpha_tc = np.zeros((len(n_range), len(T_range)))
     mMSE_alpha_gr = np.zeros((len(n_range), len(T_range)))
     mMSE_alpha_al = np.zeros((len(n_range), len(T_range)))
     mMSE_alpha_alr = np.zeros((len(n_range), len(T_range)))
     mMSE_C = np.zeros((len(n_range), len(T_range)))
     # hold parameter's standard deviation MSE for range of (n) and (T)
     sMSE_mu = np.zeros((len(n_range), len(T_range)))
-    sMSE_alpha_n = np.zeros((len(n_range), len(T_range)))
+    sMSE_alpha_s = np.zeros((len(n_range), len(T_range)))
     sMSE_alpha_r = np.zeros((len(n_range), len(T_range)))
-    sMSE_alpha_br = np.zeros((len(n_range), len(T_range)))
+    sMSE_alpha_tc = np.zeros((len(n_range), len(T_range)))
     sMSE_alpha_gr = np.zeros((len(n_range), len(T_range)))
     sMSE_alpha_al = np.zeros((len(n_range), len(T_range)))
     sMSE_alpha_alr = np.zeros((len(n_range), len(T_range)))
@@ -305,9 +307,9 @@ def parameters_estimation_MSE(fixed_n=True, n_run = 10, verbose=False, file_name
                 print(f"\nAt duration={T}, n_nodes:{n} ")
             # hold parameters' MSE for current run (certain value of n, T)
             MSE_mu = np.zeros(n_run)
-            MSE_alpha_n = np.zeros(n_run)
+            MSE_alpha_s = np.zeros(n_run)
             MSE_alpha_r = np.zeros(n_run)
-            MSE_alpha_br = np.zeros(n_run)
+            MSE_alpha_tc = np.zeros(n_run)
             MSE_alpha_gr = np.zeros(n_run)
             MSE_alpha_al = np.zeros(n_run)
             MSE_alpha_alr = np.zeros(n_run)
@@ -316,52 +318,52 @@ def parameters_estimation_MSE(fixed_n=True, n_run = 10, verbose=False, file_name
                 # simulate from mulch at a certain n, T
                 events_dict, node_mem_true = simulate_mulch(sim_param, n, K, percent, T)
                 n_events = cal_num_events(events_dict)
-                agg_adj = mulch_fit.event_dict_to_aggregated_adjacency(n, events_dict)
+                agg_adj = fit_model.event_dict_to_aggregated_adjacency(n, events_dict)
                 # if it == 0:
                 #     mulch_fit.plot_adj(agg_adj, node_mem_true, K, f"N={N}, T={T}")
                 # run spectral clustering
-                node_mem_spectral = mulch_fit.spectral_cluster1(agg_adj, K, n_kmeans_init=500, normalize_z=True,
+                node_mem_spectral = fit_model.spectral_cluster1(agg_adj, K, n_kmeans_init=500, normalize_z=True,
                                                                 multiply_s=True)
                 rand_i = adjusted_rand_score(node_mem_true, node_mem_spectral)
                 if verbose:
                     print(f"\t\titer# {it}: RI={rand_i:.3f}, #events={n_events}")
-                fit_param, ll_train, _ = mulch_fit.model_fit(n_alpha, events_dict, node_mem_spectral, K, T,
+                fit_param, ll_train, _ = fit_model.model_fit(n_alpha, events_dict, node_mem_spectral, K, T,
                                                              betas)
                 MSE_mu[it] = np.sum(np.square(sim_param[0] - fit_param[0]))
-                MSE_alpha_n[it] = np.sum(np.square(sim_param[1] - fit_param[1]))
+                MSE_alpha_s[it] = np.sum(np.square(sim_param[1] - fit_param[1]))
                 MSE_alpha_r[it] = np.sum(np.square(sim_param[2] - fit_param[2]))
-                MSE_alpha_br[it] = np.sum(np.square(sim_param[3] - fit_param[3]))
+                MSE_alpha_tc[it] = np.sum(np.square(sim_param[3] - fit_param[3]))
                 MSE_alpha_gr[it] = np.sum(np.square(sim_param[4] - fit_param[4]))
                 MSE_alpha_al[it] = np.sum(np.square(sim_param[5] - fit_param[5]))
                 MSE_alpha_alr[it] = np.sum(np.square(sim_param[6] - fit_param[6]))
                 MSE_C[it] = np.sum(np.square(sim_param[7][:, :, :-1] - fit_param[7][:, :, :-1]))
                 if verbose:
                     print(f"\t\tSample MSE: mu={MSE_mu[it]:.4f}, alpha_r={MSE_alpha_r[it]:.4f}, "
-                          f"alpha_br{MSE_alpha_br[it]:.4f}, C={MSE_C[it]:.4f}")
+                          f"alpha_tc{MSE_alpha_tc[it]:.4f}, C={MSE_C[it]:.4f}")
             mMSE_mu[N_idx, T_idx] = np.mean(MSE_mu)
-            mMSE_alpha_n[N_idx, T_idx] = np.mean(MSE_alpha_n)
+            mMSE_alpha_s[N_idx, T_idx] = np.mean(MSE_alpha_s)
             mMSE_alpha_r[N_idx, T_idx] = np.mean(MSE_alpha_r)
-            mMSE_alpha_br[N_idx, T_idx] = np.mean(MSE_alpha_br)
+            mMSE_alpha_tc[N_idx, T_idx] = np.mean(MSE_alpha_tc)
             mMSE_alpha_gr[N_idx, T_idx] = np.mean(MSE_alpha_gr)
             mMSE_alpha_al[N_idx, T_idx] = np.mean(MSE_alpha_al)
             mMSE_alpha_alr[N_idx, T_idx] = np.mean(MSE_alpha_alr)
             mMSE_C[N_idx, T_idx] = np.mean(MSE_C)
             sMSE_mu[N_idx, T_idx] = np.mean(MSE_mu)
-            sMSE_alpha_n[N_idx, T_idx] = np.std(MSE_alpha_n)
+            sMSE_alpha_s[N_idx, T_idx] = np.std(MSE_alpha_s)
             sMSE_alpha_r[N_idx, T_idx] = np.std(MSE_alpha_r)
-            sMSE_alpha_br[N_idx, T_idx] = np.std(MSE_alpha_br)
+            sMSE_alpha_tc[N_idx, T_idx] = np.std(MSE_alpha_tc)
             sMSE_alpha_gr[N_idx, T_idx] = np.std(MSE_alpha_gr)
             sMSE_alpha_al[N_idx, T_idx] = np.std(MSE_alpha_al)
             sMSE_alpha_alr[N_idx, T_idx] = np.std(MSE_alpha_alr)
             sMSE_C[N_idx, T_idx] = np.std(MSE_C)
             if verbose:
                 print(f"Average MSE: mu={mMSE_mu[N_idx, T_idx]:.4f}, alpha_r={mMSE_alpha_r[N_idx, T_idx]:.4f},"
-                  f"alpha_br={mMSE_alpha_br[N_idx, T_idx]:.4f}, C={mMSE_C[N_idx, T_idx]:.4f}")
+                  f"alpha_tc={mMSE_alpha_tc[N_idx, T_idx]:.4f}, C={mMSE_C[N_idx, T_idx]:.4f}")
     results_dict = {}
     results_dict["sim_param"] = sim_param
-    results_dict["MSE_mean"] = (mMSE_mu, mMSE_alpha_n, mMSE_alpha_r, mMSE_alpha_br, mMSE_alpha_gr, mMSE_alpha_al
+    results_dict["MSE_mean"] = (mMSE_mu, mMSE_alpha_s, mMSE_alpha_r, mMSE_alpha_tc, mMSE_alpha_gr, mMSE_alpha_al
                                 , mMSE_alpha_alr, mMSE_C)
-    results_dict["MSE_std"] = (sMSE_mu, sMSE_alpha_n, sMSE_alpha_r, sMSE_alpha_br, sMSE_alpha_gr, sMSE_alpha_al
+    results_dict["MSE_std"] = (sMSE_mu, sMSE_alpha_s, sMSE_alpha_r, sMSE_alpha_tc, sMSE_alpha_gr, sMSE_alpha_al
                                , sMSE_alpha_alr, sMSE_C)
     results_dict["N_range"] = n_range
     results_dict["T_range"] = T_range

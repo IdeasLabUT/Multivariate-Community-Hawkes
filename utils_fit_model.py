@@ -1,9 +1,16 @@
 """MULCH fit and log-likelihood functions (full model level)
 
+The script also includes:
+ - read_csv_split_train() to read dataset csv files
+ - visualization functions:
+    - analyze_block()
+    - print_mulch_param()
+    - plot_mulch_param()
+    - plot_kernel()
+    - plot_adj()
+
 @author: Hadeel Soliman
 """
-
-# TODO: rearrange functions - rename
 
 import numpy as np
 import pandas as pd
@@ -20,7 +27,7 @@ def log_likelihood_mulch(params, events_dict, node_mem, k, end_time, ref=False):
     """
     calculate full MULCH log-likelihood for all block pairs
 
-    :param tuple params: (mu_bp, alpha_1_bp, ..., alpha_n_bp, C, betas)
+    :param tuple params: (mu_bp, alpha_1_bp, ..., alpha_s_bp, C, betas)
         where mu_bp, alpha_i_bp are (K, K) arrays & C is (K, K, Q) array & betas is (Q,) array
     :param dict events_dict: dataset formatted as a dictionary {(u, v) node pairs in network : [t1, t2, ...] array of
         events between (u, v)}
@@ -46,7 +53,7 @@ def model_LL_2_alpha(params, events_dict_bp, end_time, m_bp, n_K, K, ref=False):
     """
     calculate full MULCH log-likelihood for 2-alphas model version
 
-    :param tuple params: (mu_bp, alpha_1_bp, ..., alpha_n_bp, C, betas)
+    :param tuple params: (mu_bp, alpha_1_bp, ..., alpha_s_bp, C, betas)
         where mu_bp, alpha_i_bp are (K, K) arrays & C is (K, K, Q) array & betas is (Q,) array
     :param events_dict_bp: KxK list, each element events_dict[a][b] is events_dict of the block pair (a, b)
     :param float end_time: network duration
@@ -57,12 +64,12 @@ def model_LL_2_alpha(params, events_dict_bp, end_time, m_bp, n_K, K, ref=False):
     :return: model's log-likelihood and number of events in dataset
     :rtype: (float, int)
     """
-    mu_bp, alpha_n_bp, alpha_r_bp, C_bp, betas = params
+    mu_bp, alpha_s_bp, alpha_r_bp, C_bp, betas = params
     LL_bp = np.zeros((K, K))
     num_events = 0
     for i in range(K):
         for j in range(K):
-            par = (mu_bp[i, j], alpha_n_bp[i, j], alpha_r_bp[i, j], C_bp[i, j, :], betas)
+            par = (mu_bp[i, j], alpha_s_bp[i, j], alpha_r_bp[i, j], C_bp[i, j, :], betas)
             if i == j:  # diagonal block pair
                 ll_dia = utils_fit_bp.LL_2_alpha_dia_bp(par, events_dict_bp[i][j], end_time, n_K[j, 0], m_bp[i, j])
                 LL_bp[i, j] = ll_dia
@@ -91,12 +98,12 @@ def model_LL_4_alpha(params, events_dict_bp, end_time, m_bp, n_K, K, ref=False):
     :return: model's log-likelihood and number of events in dataset
     :rtype: (float, int)
     """
-    mu_bp, alpha_n_bp, alpha_r_bp, alpha_br_bp, alpha_gr_bp, C_bp, betas = params
+    mu_bp, alpha_s_bp, alpha_r_bp, alpha_tc_bp, alpha_gr_bp, C_bp, betas = params
     LL_bp = np.zeros((K, K))
     num_events = 0
     for i in range(K):
         for j in range(K):
-            par = (mu_bp[i, j], alpha_n_bp[i, j], alpha_r_bp[i, j], alpha_br_bp[i, j], alpha_gr_bp[i, j],
+            par = (mu_bp[i, j], alpha_s_bp[i, j], alpha_r_bp[i, j], alpha_tc_bp[i, j], alpha_gr_bp[i, j],
                    C_bp[i, j],betas)
             if i == j:  # diagonal block pair
                 ll_dia = utils_fit_bp.LL_4_alpha_dia_bp(par, events_dict_bp[i][j], end_time, n_K[j, 0], m_bp[i, j])
@@ -115,7 +122,7 @@ def model_LL_6_alpha(params, events_dict_bp, end_time, m_bp, n_K, K, ref=False):
     """
     calculate full MULCH log-likelihood for 6-alphas model version
 
-    :param tuple params: (mu_bp, alpha_1_bp, ..., alpha_n_bp, C, betas)
+    :param tuple params: (mu_bp, alpha_1_bp, ..., alpha_s_bp, C, betas)
         where mu_bp, alpha_i_bp are (K, K) arrays & C is (K, K, Q) array & betas is (Q,) array
     :param events_dict_bp: KxK list, each element events_dict[a][b] is events_dict of the block pair (a, b)
     :param float end_time: network duration
@@ -126,12 +133,12 @@ def model_LL_6_alpha(params, events_dict_bp, end_time, m_bp, n_K, K, ref=False):
     :return: model's log-likelihood and number of events in dataset
     :rtype: (float, int)
     """
-    mu_bp, alpha_n_bp, alpha_r_bp, alpha_br_bp, alpha_gr_bp, alpha_al_bp, alpha_alr_bp, C_bp, betas = params
+    mu_bp, alpha_s_bp, alpha_r_bp, alpha_tc_bp, alpha_gr_bp, alpha_al_bp, alpha_alr_bp, C_bp, betas = params
     LL_bp = np.zeros((K, K))
     num_events = 0
     for i in range(K):
         for j in range(K):
-            par = (mu_bp[i, j], alpha_n_bp[i, j], alpha_r_bp[i, j], alpha_br_bp[i, j], alpha_gr_bp[i, j],
+            par = (mu_bp[i, j], alpha_s_bp[i, j], alpha_r_bp[i, j], alpha_tc_bp[i, j], alpha_gr_bp[i, j],
                    alpha_al_bp[i, j], alpha_alr_bp[i, j], C_bp[i, j], betas)
             if i == j:  # diagonal block pair
                 ll_dia = utils_fit_bp.LL_6_alpha_dia_bp(par, events_dict_bp[i][j], end_time, n_K[j, 0], m_bp[i, j])
@@ -192,7 +199,7 @@ def model_fit_2_alpha(events_dict, node_mem, K, end_time, betas, ref=False):
     block_pairs_train = events_dict_to_events_dict_bp(events_dict, node_mem, K)
     # initialize parameters matrices
     mu_bp = np.zeros((K, K))
-    alpha_n_bp = np.zeros((K, K))
+    alpha_s_bp = np.zeros((K, K))
     alpha_r_bp = np.zeros((K, K))
     C_bp = np.zeros((K, K, np.size(betas)))
     for i in range(K):
@@ -204,11 +211,11 @@ def model_fit_2_alpha(events_dict, node_mem, K, end_time, betas, ref=False):
                 params_est = utils_fit_bp.fit_2_alpha_off_bp(block_pairs_train[i][j], block_pairs_train[j][i],
                                                              end_time, n_nodes_c[j,0], block_pair_M_train[i, j], betas)
             mu_bp[i, j] = params_est[0]
-            alpha_n_bp[i, j] = params_est[1]
+            alpha_s_bp[i, j] = params_est[1]
             alpha_r_bp[i, j] = params_est[2]
             C_bp[i,j,:] = params_est[3]
     # calclate log-likelihood on train, test, all datasets
-    params_tuple = (mu_bp, alpha_n_bp, alpha_r_bp, C_bp, betas)
+    params_tuple = (mu_bp, alpha_s_bp, alpha_r_bp, C_bp, betas)
     ll_train, num_events_train = model_LL_2_alpha(params_tuple, block_pairs_train, end_time,
                                                   block_pair_M_train, n_nodes_c, K, ref)
     if ref:
@@ -234,9 +241,9 @@ def model_fit_4_alpha(events_dict, node_mem, K, end_time, betas, ref=False):
     block_pairs_train = events_dict_to_events_dict_bp(events_dict, node_mem, K)
     # initialize paramters matrices
     mu_bp = np.zeros((K, K))
-    alpha_n_bp = np.zeros((K, K))
+    alpha_s_bp = np.zeros((K, K))
     alpha_r_bp = np.zeros((K, K))
-    alpha_br_bp = np.zeros((K, K))
+    alpha_tc_bp = np.zeros((K, K))
     alpha_gr_bp = np.zeros((K, K))
     C_bp = np.zeros((K, K, np.size(betas)))
     for i in range(K):
@@ -248,13 +255,13 @@ def model_fit_4_alpha(events_dict, node_mem, K, end_time, betas, ref=False):
                 params_est = utils_fit_bp.fit_4_alpha_off_bp(block_pairs_train[i][j], block_pairs_train[j][i],
                                                              end_time, n_nodes_c[j,0], block_pair_M_train[i, j], betas)
             mu_bp[i, j] = params_est[0]
-            alpha_n_bp[i, j] = params_est[1]
+            alpha_s_bp[i, j] = params_est[1]
             alpha_r_bp[i, j] = params_est[2]
-            alpha_br_bp[i, j] = params_est[3]
+            alpha_tc_bp[i, j] = params_est[3]
             alpha_gr_bp[i, j] = params_est[4]
             C_bp[i,j,:] = params_est[5]
     # calclate log-likelihood on train, test, all datasets
-    params_tuple = (mu_bp, alpha_n_bp, alpha_r_bp, alpha_br_bp, alpha_gr_bp, C_bp, betas)
+    params_tuple = (mu_bp, alpha_s_bp, alpha_r_bp, alpha_tc_bp, alpha_gr_bp, C_bp, betas)
     ll_train, num_events_train = model_LL_4_alpha(params_tuple, block_pairs_train, end_time,
                                                   block_pair_M_train, n_nodes_c, K, ref)
     if ref:
@@ -280,9 +287,9 @@ def model_fit_6_alpha(events_dict, node_mem, n_classes, end_time, betas, ref=Fal
     block_pairs_train = events_dict_to_events_dict_bp(events_dict, node_mem, n_classes)
     # initialize paramters matrices
     mu_bp = np.zeros((n_classes, n_classes))
-    alpha_n_bp = np.zeros((n_classes, n_classes))
+    alpha_s_bp = np.zeros((n_classes, n_classes))
     alpha_r_bp = np.zeros((n_classes,n_classes))
-    alpha_br_bp = np.zeros((n_classes, n_classes))
+    alpha_tc_bp = np.zeros((n_classes, n_classes))
     alpha_gr_bp = np.zeros((n_classes, n_classes))
     alpha_al_bp = np.zeros((n_classes, n_classes))
     alpha_alr_bp = np.zeros((n_classes, n_classes))
@@ -296,15 +303,15 @@ def model_fit_6_alpha(events_dict, node_mem, n_classes, end_time, betas, ref=Fal
                 params_est = utils_fit_bp.fit_6_alpha_off_bp(block_pairs_train[i][j], block_pairs_train[j][i],
                                                              end_time, n_nodes_c[j,0], block_pair_M_train[i, j], betas)
             mu_bp[i, j] = params_est[0]
-            alpha_n_bp[i, j] = params_est[1]
+            alpha_s_bp[i, j] = params_est[1]
             alpha_r_bp[i, j] = params_est[2]
-            alpha_br_bp[i, j] = params_est[3]
+            alpha_tc_bp[i, j] = params_est[3]
             alpha_gr_bp[i, j] = params_est[4]
             alpha_al_bp[i, j] = params_est[5]
             alpha_alr_bp[i, j] = params_est[6]
             C_bp[i,j,:] = params_est[7]
     # calclate log-likelihood on train, test, all datasets
-    params_tuple = (mu_bp, alpha_n_bp, alpha_r_bp, alpha_br_bp, alpha_gr_bp, alpha_al_bp, alpha_alr_bp, C_bp, betas)
+    params_tuple = (mu_bp, alpha_s_bp, alpha_r_bp, alpha_tc_bp, alpha_gr_bp, alpha_al_bp, alpha_alr_bp, C_bp, betas)
     ll_train, num_events_train = model_LL_6_alpha(params_tuple, block_pairs_train, end_time,
                                                   block_pair_M_train, n_nodes_c, n_classes, ref)
     if ref:
@@ -376,68 +383,6 @@ def spectral_cluster1(adj, num_classes=2, n_kmeans_init=100, normalize_z=True, m
     return cluster_pred
 #%% model fitting helper function
 
-def plot_adj(agg_adj, node_mem, K, s=""):
-    """plot adjacency matrix permuted by nodes membership"""
-    nodes_per_class, n_class = [], []
-    N = len(node_mem)
-    for k in range(K):
-        class_k_nodes = np.where(node_mem == k)[0]
-        nodes_per_class.append(class_k_nodes)
-        n_class.append(len(class_k_nodes))
-    adj_ordered = np.zeros((N, N), dtype=int)
-    i_a, i_b = 0, 0
-    for a in range(K):
-        for b in range(K):
-            adj_ordered[i_a: i_a+n_class[a], i_b:i_b+ n_class[b]] =  agg_adj[nodes_per_class[a], :][:, nodes_per_class[b]]
-            i_b += n_class[b]
-        i_b = 0
-        i_a += n_class[a]
-    plt.figure()
-    plt.pcolor(adj_ordered)
-    plt.title("permuted count matrix "+ s)
-    plt.show()
-
-
-def print_model_param_kernel_sum(params):
-    """ print MULCH model estimated parameters
-
-    :param params: (mu_bp, alpha_1_bp, ..., alpha_n_bp, C, betas)
-        where mu_bp, alpha_i_bp are (K, K) arrays & C is (K, K, Q) array & betas is (Q,) array
-    """
-    print("mu")
-    print(params[0])
-    print("\nalpha_n")
-    print(params[1])
-    print("\nalpha_r")
-    print(params[2])
-    classes = np.shape(params[0])[0]
-    if len(params) == 5:
-        print("\nC")
-        for i in range(classes):
-            for j in range(classes):
-                print(params[3][i, j, :], end='\t')
-            print(" ")
-    else:
-        print("\nalpha_br")
-        print(params[3])
-        print("\nalpha_gr")
-        print(params[4])
-        if len(params) == 7:
-            print("\nC")
-            for i in range(classes):
-                for j in range(classes):
-                    print(params[5][i, j, :], end='\t')
-                print(" ")
-        elif len(params) == 9:
-            print("\nalpha_al")
-            print(params[5])
-            print("\nalpha_alr")
-            print(params[6])
-            print("\nC")
-            for i in range(classes):
-                for j in range(classes):
-                    print(params[7][i, j, :], end='\t')
-                print(" ")
 
 def assign_node_membership_for_missing_nodes(node_membership, missing_nodes):
     """
@@ -487,20 +432,6 @@ def num_nodes_pairs_per_block_pair(node_mem, K):
     classes, n_node_per_class = np.unique(node_mem, return_counts=True)
     n_node_per_class = n_node_per_class.reshape((K, 1))
     return (np.matmul(n_node_per_class, n_node_per_class.T)- np.diagflat(n_node_per_class), n_node_per_class)
-
-def split_train(events_dict, split_ratio=0.8):
-    events_list = list(events_dict.values())
-    # find spliting point
-    events_array = np.sort(np.concatenate(events_list))
-    split_point = round(events_array.shape[0] * split_ratio)
-    split_time = events_array[split_point]
-    events_dict_t = {}
-    for (u, v) in events_dict:
-        p = np.array(events_dict[(u,v)])
-        p_train = p[p<split_time]
-        if len(p_train)!= 0 :
-            events_dict_t[(u,v)] = p_train
-    return events_dict_t, split_time
 
 def get_node_id_maps(node_set):
     """
@@ -648,3 +579,122 @@ def event_dict_to_adjacency(num_nodes, event_dicts, dtype=np.float):
     return adjacency_matrix
 
 
+#%% visualization functions
+def plot_adj(agg_adj, node_mem, K, s=""):
+    """plot adjacency matrix permuted by nodes membership"""
+    nodes_per_class, n_class = [], []
+    N = len(node_mem)
+    for k in range(K):
+        class_k_nodes = np.where(node_mem == k)[0]
+        nodes_per_class.append(class_k_nodes)
+        n_class.append(len(class_k_nodes))
+    adj_ordered = np.zeros((N, N), dtype=int)
+    i_a, i_b = 0, 0
+    for a in range(K):
+        for b in range(K):
+            adj_ordered[i_a: i_a+n_class[a], i_b:i_b+ n_class[b]] =  agg_adj[nodes_per_class[a], :][:, nodes_per_class[b]]
+            i_b += n_class[b]
+        i_b = 0
+        i_a += n_class[a]
+    plt.figure()
+    plt.pcolor(adj_ordered)
+    plt.title("permuted count matrix "+ s)
+    plt.show()
+
+
+def plot_mulch_param(params, n_alpha):
+    """plot MULCH model parameters
+
+    :param params: (mu_bp, alpha_1_bp, ..., alpha_n_bp, C, betas)
+        where mu_bp, alpha_i_bp are (K, K) arrays & C is (K, K, Q) array & betas is (Q,) array
+    :return: None
+    """
+    param_name = ["mu", "alpha_self", "alpha_recip", "alpha_turn_cont", "alpha_generalized_recip",
+                  "alpha_allied_cont", "alpha_allied_recip"]
+    for param, i in zip(params, range(n_alpha + 1)):
+        fig, ax = plt.subplots(figsize=(5, 4))
+        plot = ax.pcolor(param, cmap='gist_yarg')
+        ax.set_xticks(np.arange(0.5, 4))
+        ax.set_xticklabels(np.arange(1,5))
+        ax.set_yticks(np.arange(0.5, 4))
+        ax.set_yticklabels(np.arange(1, 5))
+        ax.invert_yaxis()
+        fig.colorbar(plot, ax=ax)
+        fig.tight_layout()
+        ax.set_title(param_name[i]) # comment to save as pdf
+        # fig.savefig(f"/shared/Results/MultiBlockHawkesModel/figures/MID_casestudy/{param_name[i]}.pdf")
+        plt.show()
+
+def plot_kernel(alpha, betas, C, time_range):
+    """plot a block pair decay kernel"""
+    lambda_sum = []
+    for t in time_range:
+        lambda_sum.append(alpha * np.sum(betas * C * np.exp(-t * betas)))
+    plt.figure()
+    plt.plot(time_range, lambda_sum, color='red', label=f"betas1={betas}")
+    plt.xlabel("t(s)")
+    plt.ylabel("lambda(t)")
+    plt.yscale('log')
+    plt.title('sum of kernels C=[0.33, 0.33, 0.34] - y-log scale ')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+def print_mulch_param(params):
+    """print MULCH model estimated parameters
+
+    :param params: (mu_bp, alpha_1_bp, ..., alpha_n_bp, C, betas)
+        where mu_bp, alpha_i_bp are (K, K) arrays & C is (K, K, Q) array & betas is (Q,) array
+    :return: None
+    """
+    print("mu")
+    print(params[0])
+    print("\nalpha_s")
+    print(params[1])
+    print("\nalpha_r")
+    print(params[2])
+    classes = np.shape(params[0])[0]
+    if len(params) == 5:
+        print("\nC")
+        for i in range(classes):
+            for j in range(classes):
+                print(params[3][i, j, :], end='\t')
+            print(" ")
+    else:
+        print("\nalpha_tc")
+        print(params[3])
+        print("\nalpha_gr")
+        print(params[4])
+        if len(params) == 7:
+            print("\nC")
+            for i in range(classes):
+                for j in range(classes):
+                    print(params[5][i, j, :], end='\t')
+                print(" ")
+        elif len(params) == 9:
+            print("\nalpha_al")
+            print(params[5])
+            print("\nalpha_alr")
+            print(params[6])
+            print("\nC")
+            for i in range(classes):
+                for j in range(classes):
+                    print(params[7][i, j, :], end='\t')
+                print(" ")
+
+
+def analyze_block(node_mem, K, id_node_map):
+    """print nodes in each block, given id_node_map
+
+    :param node_mem: (n,) nodes membership
+    :param K: number of blocks
+    :param id_node_map: dictionary {node_id : node_name}
+    :return: None
+    """
+    print(np.histogram(node_mem, bins=K))
+    for i in range(K):
+        print(f"Block {i}")
+        nodes_in_class_i = np.where(node_mem == i)[0]
+        for id in nodes_in_class_i:
+            print(id_node_map[id], end=' ')
+        print()

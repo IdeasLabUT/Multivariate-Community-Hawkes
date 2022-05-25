@@ -36,15 +36,15 @@ def print_param_kernels(param):
     """print parameters of one block pair"""
     if len(param) == 9:
         print(f"C = {param[7]}")
-        print(f"mu={param[0]:.7f}, alpha_n={param[1]:.4f}, alpha_r={param[2]:.4f}, alpha_br={param[3]:.4f},"
+        print(f"mu={param[0]:.7f}, alpha_s={param[1]:.4f}, alpha_r={param[2]:.4f}, alpha_tc={param[3]:.4f},"
               f" alpha_gr={param[4]:.4f}, alpha_al={param[5]:.4f}, alpha_alr={param[6]:.4f}")
     elif len(param) == 7:
         print(f"C = {param[5]}")
-        print(f"mu={param[0]:.7f}, alpha_n={param[1]:.4f}, alpha_r={param[2]:.4f}, alpha_br={param[3]:.4f},"
+        print(f"mu={param[0]:.7f}, alpha_s={param[1]:.4f}, alpha_r={param[2]:.4f}, alpha_tc={param[3]:.4f},"
               f" alpha_gr={param[4]:.4f}")
     elif len(param) == 5:
         print(f"C = {param[3]}")
-        print(f"mu={param[0]:.7f}, alpha_n={param[1]:.4f}, alpha_r={param[2]:.4f}")
+        print(f"mu={param[0]:.7f}, alpha_s={param[1]:.4f}, alpha_r={param[2]:.4f}")
 
 
 def cal_num_events(events_dict):
@@ -120,7 +120,7 @@ def cal_R_6_alpha_dia_bp(events_dict, betas):
         if num_events_uv == 0:
             Ris.append(np.array([0]))  # R=0 if node_pair (u,v) has no events
         else:
-            # 6*Q columns (alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr)*Q
+            # 6*Q columns (alpha_s, alpha_r, alpha_tc, alpha_gr, alpha_al, alpha_alr)*Q
             Ri = np.zeros((num_events_uv, 6 * Q))
             uv_intertimes = (uv_events[1:] - uv_events[:-1])
             # (#_uv_events-1, Q) array
@@ -128,7 +128,7 @@ def cal_R_6_alpha_dia_bp(events_dict, betas):
             for q in range(Q):
                 e_intertimes_Q[:, q] = np.exp(-betas[q] * uv_intertimes)
             for (x, y) in events_dict:
-                # same node_pair events (alpha_n)
+                # same node_pair events (alpha_s)
                 if (u, v) == (x, y):
                     for k in range(1, num_events_uv):
                         for q in range(Q):
@@ -138,7 +138,7 @@ def cal_R_6_alpha_dia_bp(events_dict, betas):
                     Ri_temp = get_Ri_temp_Q(uv_events, e_intertimes_Q, events_dict[(x, y)], betas)
                     for q in range(Q):
                         Ri[:, 1 + q * 6] = Ri_temp[:, q]
-                # br node_pairs events (alpha_br)
+                # br node_pairs events (alpha_tc)
                 elif u == x and v != y:
                     Ri_temp = get_Ri_temp_Q(uv_events, e_intertimes_Q, events_dict[(x, y)], betas)
                     for q in range(Q):
@@ -179,7 +179,7 @@ def LL_6_alpha_dia_bp(params, events_dict, end_time, n_a, m, T_diff_sums=None, R
     """
 
     # C: scaling parameters - same length as betas
-    mu, alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr, C, betas = params
+    mu, alpha_s, alpha_r, alpha_tc, alpha_gr, alpha_al, alpha_alr, C, betas = params
     Q = len(betas)
     # first term
     first = -m * mu * end_time
@@ -189,7 +189,7 @@ def LL_6_alpha_dia_bp(params, events_dict, end_time, n_a, m, T_diff_sums=None, R
     # second term
     if T_diff_sums is None:
         T_diff_sums = cal_diff_sums_Q(events_dict, end_time, betas)
-    second = -(alpha_n + alpha_r + (alpha_br + alpha_gr + alpha_al + alpha_alr) * (n_a - 2)) * C @ T_diff_sums
+    second = -(alpha_s + alpha_r + (alpha_tc + alpha_gr + alpha_al + alpha_alr) * (n_a - 2)) * C @ T_diff_sums
     # third term
     if Ris is None:
         Ris = cal_R_6_alpha_dia_bp(events_dict, betas)
@@ -197,8 +197,8 @@ def LL_6_alpha_dia_bp(params, events_dict, end_time, n_a, m, T_diff_sums=None, R
     for i in range(len(Ris)):
         col_sum = np.zeros(Ris[i].shape[0])
         for q in range(Q):
-            col_sum[:] += C[q]*betas[q] * (alpha_n * Ris[i][:, 0 + q * 6]  + alpha_r * Ris[i][:, 1 + q * 6] +
-                                           alpha_br * Ris[i][:, 2 + q * 6] + alpha_gr * Ris[i][:,3 + q * 6] +
+            col_sum[:] += C[q]*betas[q] * (alpha_s * Ris[i][:, 0 + q * 6]  + alpha_r * Ris[i][:, 1 + q * 6] +
+                                           alpha_tc * Ris[i][:, 2 + q * 6] + alpha_gr * Ris[i][:,3 + q * 6] +
                                            alpha_al * Ris[i][:, 4 + q * 6] + alpha_alr * Ris[i][:,5 + q * 6])
         col_sum += mu
         third += np.sum(np.log(col_sum))
@@ -225,19 +225,19 @@ def NLL_6_alpha_dia_bp(p, betas, events_dict, end_time, n_a, m, T_diff_sums, Ris
     :rtype: float
     """
 
-    mu, alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr = p[:7]
+    mu, alpha_s, alpha_r, alpha_tc, alpha_gr, alpha_al, alpha_alr = p[:7]
     C = np.array(p[7:])
     # scaling step - constaint C sums to 1
     C_sum = np.sum(C)
     if (C_sum != 0):
         C = C / C_sum
-        alpha_n = alpha_n * C_sum
+        alpha_s = alpha_s * C_sum
         alpha_r = alpha_r * C_sum
-        alpha_br = alpha_br * C_sum
+        alpha_tc = alpha_tc * C_sum
         alpha_gr = alpha_gr * C_sum
         alpha_al = alpha_al * C_sum
         alpha_alr = alpha_alr * C_sum
-    params = mu, alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr, C, betas
+    params = mu, alpha_s, alpha_r, alpha_tc, alpha_gr, alpha_al, alpha_alr, C, betas
     return -LL_6_alpha_dia_bp(params, events_dict, end_time, n_a, m, T_diff_sums, Ris)
 def NLL_6_alpha_dia_bp_jac(p, betas, events_dict, end_time, n_a, m, T_diff_sums, Ris):
     """
@@ -257,7 +257,7 @@ def NLL_6_alpha_dia_bp_jac(p, betas, events_dict, end_time, n_a, m, T_diff_sums,
     :return: jacobian array of negative log-likelihood function with respect to MULCH parameters
     """
 
-    mu, alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr = p[:7]
+    mu, alpha_s, alpha_r, alpha_tc, alpha_gr, alpha_al, alpha_alr = p[:7]
     C = np.array(p[7:])
     Q = len(C)
     # derivatives of second term
@@ -265,7 +265,7 @@ def NLL_6_alpha_dia_bp_jac(p, betas, events_dict, end_time, n_a, m, T_diff_sums,
     d_alphas = np.zeros(6)
     d_alphas[:2] = C @ T_diff_sums
     d_alphas[2:] = (n_a - 2) * C @ T_diff_sums
-    d_C = (alpha_n + alpha_r + (n_a - 2) * (alpha_br + alpha_gr + alpha_al + alpha_alr)) * T_diff_sums
+    d_C = (alpha_s + alpha_r + (n_a - 2) * (alpha_tc + alpha_gr + alpha_al + alpha_alr)) * T_diff_sums
     # derivatives of third term
     for i in range(len(Ris)):
         denominator = np.zeros(Ris[i].shape[0])
@@ -273,8 +273,8 @@ def NLL_6_alpha_dia_bp_jac(p, betas, events_dict, end_time, n_a, m, T_diff_sums,
         numerator_alphas = np.zeros((Ris[i].shape[0], 6))
         numerator_C = []
         for q in range(Q):
-            numerator_C.append(betas[q]* (alpha_n * Ris[i][:, 0 + q * 6] + alpha_r * Ris[i][:, 1 + q * 6] +
-                                          alpha_br * Ris[i][:, 2 + q * 6] + alpha_gr * Ris[i][:,3 + q * 6] +
+            numerator_C.append(betas[q]* (alpha_s * Ris[i][:, 0 + q * 6] + alpha_r * Ris[i][:, 1 + q * 6] +
+                                          alpha_tc * Ris[i][:, 2 + q * 6] + alpha_gr * Ris[i][:,3 + q * 6] +
                                           alpha_al * Ris[i][:, 4 + q * 6] + alpha_alr * Ris[i][:,5 + q * 6]))
             denominator += C[q] * numerator_C[q]
             for j in range(6):
@@ -304,7 +304,7 @@ def fit_6_alpha_dia_bp(events_dict, end_time, n_a, m, betas):
     Q = len(betas)
     # events_dict : (u,v):array_of_events
     if len(events_dict) == 0:  # handling empty block pair with no events
-        # (mu, alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr, C, betas)
+        # (mu, alpha_s, alpha_r, alpha_tc, alpha_gr, alpha_al, alpha_alr, C, betas)
         C = np.zeros(Q)
         return (1e-10, 0, 0, 0, 0, 0, 0, C, betas)
 
@@ -312,11 +312,11 @@ def fit_6_alpha_dia_bp(events_dict, end_time, n_a, m, betas):
     Ris = cal_R_6_alpha_dia_bp(events_dict, betas)
     T_diff_sums = cal_diff_sums_Q(events_dict, end_time, betas)
 
-    # initialize parameters (mu, alpha_n, alpha_r, alpha_br, alpha_gr, c1, ..., cQ)
+    # initialize parameters (mu, alpha_s, alpha_r, alpha_tc, alpha_gr, c1, ..., cQ)
     mu_i = np.random.uniform(1e-6, 1e-2)
-    alpha_n_i, alpha_r_i = np.random.uniform(0.1, 0.5, 2)
-    alpha_br_i, alpha_gr_i, alpha_al_i, alpha_alr_i = np.random.uniform(1e-5, 0.1, 4)
-    mu_alpha_init = [mu_i, alpha_n_i, alpha_r_i, alpha_br_i, alpha_gr_i, alpha_al_i, alpha_alr_i] # <-- random initialization
+    alpha_s_i, alpha_r_i = np.random.uniform(0.1, 0.5, 2)
+    alpha_tc_i, alpha_gr_i, alpha_al_i, alpha_alr_i = np.random.uniform(1e-5, 0.1, 4)
+    mu_alpha_init = [mu_i, alpha_s_i, alpha_r_i, alpha_tc_i, alpha_gr_i, alpha_al_i, alpha_alr_i] # <-- random initialization
     # mu_alpha_init = [1e-2, 2e-2, 2e-2, 1e-2, 1e-2, 1e-2, 1e-2]  # <-- fixed initialization
     C = [1 / Q] * Q  # <-- fixed initialization
     init_param = tuple(mu_alpha_init + C)
@@ -332,21 +332,21 @@ def fit_6_alpha_dia_bp(events_dict, end_time, n_a, m, betas):
     results = res.x
     # print("success ", res.success, ", status ", res.status, ", fun value ", res.fun)
     # print("message ", res.message)
-    mu, alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr = results[:7]
+    mu, alpha_s, alpha_r, alpha_tc, alpha_gr, alpha_al, alpha_alr = results[:7]
     C = np.array(results[7:])
 
     # scaling step
     C_sum = np.sum(C)
     if C_sum != 0:
         C = C / C_sum
-        alpha_n = alpha_n * C_sum
+        alpha_s = alpha_s * C_sum
         alpha_r = alpha_r * C_sum
-        alpha_br = alpha_br * C_sum
+        alpha_tc = alpha_tc * C_sum
         alpha_gr = alpha_gr * C_sum
         alpha_al = alpha_al * C_sum
         alpha_alr = alpha_alr * C_sum
 
-    return (mu, alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr, C, betas)
+    return (mu, alpha_s, alpha_r, alpha_tc, alpha_gr, alpha_al, alpha_alr, C, betas)
 
 #%% 6-alpha off-diagonal block pair log-likelihood and fit functions
 def cal_R_6_alpha_off_bp(events_dict, events_dict_r, betas):
@@ -368,7 +368,7 @@ def cal_R_6_alpha_off_bp(events_dict, events_dict_r, betas):
         if num_events_uv == 0:
             Ris.append(np.array([0]))  # R=0 if node_pair (u,v) has no events
         else:
-            # 6*Q columns (alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr)*Q
+            # 6*Q columns (alpha_s, alpha_r, alpha_tc, alpha_gr, alpha_al, alpha_alr)*Q
             Ri = np.zeros((num_events_uv, 6 * Q))
             uv_intertimes = (uv_events[1:] - uv_events[:-1])
             # (#_uv_events-1, Q) array
@@ -378,12 +378,12 @@ def cal_R_6_alpha_off_bp(events_dict, events_dict_r, betas):
 
             # loop through node pairs in block pair ab
             for (x, y) in events_dict:
-                # same node_pair events (alpha_n)
+                # same node_pair events (alpha_s)
                 if (u, v) == (x, y):
                     for k in range(1, num_events_uv):
                         for q in range(Q):
                             Ri[k, 0 + q * 6] = e_intertimes_Q[k - 1, q] * (1 + Ri[k - 1, 0 + q * 6])
-                # br node_pairs events (alpha_br)
+                # br node_pairs events (alpha_tc)
                 elif u == x and v != y:
                     Ri_temp = get_Ri_temp_Q(uv_events, e_intertimes_Q, events_dict[(x, y)], betas)
                     for q in range(Q):
@@ -431,7 +431,7 @@ def LL_6_alpha_off_bp(params, ed, ed_r, end_time, n_b, m_ab, T_diff_sums=None, T
     :rtype: float
     """
     # C: scaling parameters - same length as betas
-    mu, alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr, C, betas = params
+    mu, alpha_s, alpha_r, alpha_tc, alpha_gr, alpha_al, alpha_alr, C, betas = params
     Q = len(betas)
     N_a = m_ab // n_b
     ##first term
@@ -440,7 +440,7 @@ def LL_6_alpha_off_bp(params, ed, ed_r, end_time, n_b, m_ab, T_diff_sums=None, T
     if T_diff_sums is None:
         T_diff_sums = cal_diff_sums_Q(ed, end_time, betas)
         T_diff_sums_r = cal_diff_sums_Q(ed_r, end_time, betas)
-    second = -(alpha_n + alpha_br * (n_b - 1) + alpha_al * (N_a - 1)) * C @ T_diff_sums
+    second = -(alpha_s + alpha_tc * (n_b - 1) + alpha_al * (N_a - 1)) * C @ T_diff_sums
     second -= (alpha_r + alpha_gr * (n_b - 1) + alpha_alr * (N_a - 1)) * C @ T_diff_sums_r
     ##third term
     if Ris is None:
@@ -449,8 +449,8 @@ def LL_6_alpha_off_bp(params, ed, ed_r, end_time, n_b, m_ab, T_diff_sums=None, T
     for i in range(len(Ris)):
         col_sum = np.zeros(Ris[i].shape[0])
         for q in range(Q):
-            col_sum[:] += C[q] * betas[q]  * (alpha_n * Ris[i][:, 0 + q * 6] + alpha_r * Ris[i][:, 1 + q * 6] +
-                                              alpha_br * Ris[i][:, 2 + q * 6] + alpha_gr * Ris[i][:, 3 + q * 6] +
+            col_sum[:] += C[q] * betas[q]  * (alpha_s * Ris[i][:, 0 + q * 6] + alpha_r * Ris[i][:, 1 + q * 6] +
+                                              alpha_tc * Ris[i][:, 2 + q * 6] + alpha_gr * Ris[i][:, 3 + q * 6] +
                                               alpha_al * Ris[i][:, 4 + q * 6] + alpha_alr * Ris[i][:,5 + q * 6])
         col_sum += mu
         third += np.sum(np.log(col_sum))
@@ -475,19 +475,19 @@ def NLL_6_alpha_off_bp(p, betas, ed, ed_r, end_time, n_b, m_ab, T_diff_sums, T_d
     :return: block pair negative log-likelihood
     :rtype: float
     """
-    mu, alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr = p[:7]
+    mu, alpha_s, alpha_r, alpha_tc, alpha_gr, alpha_al, alpha_alr = p[:7]
     C = np.array(p[7:])
     # scaling step - constaint C sums to 1
     C_sum = np.sum(C)
     if (C_sum != 0):
         C = C / C_sum
-        alpha_n = alpha_n * C_sum
+        alpha_s = alpha_s * C_sum
         alpha_r = alpha_r * C_sum
-        alpha_br = alpha_br * C_sum
+        alpha_tc = alpha_tc * C_sum
         alpha_gr = alpha_gr * C_sum
         alpha_al = alpha_al * C_sum
         alpha_alr = alpha_alr * C_sum
-    params = mu, alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr, C, betas
+    params = mu, alpha_s, alpha_r, alpha_tc, alpha_gr, alpha_al, alpha_alr, C, betas
     return -LL_6_alpha_off_bp(params, ed, ed_r, end_time, n_b, m_ab, T_diff_sums, T_diff_sums_r, Ris)
 def NLL_6_alpha_off_bp_jac(p, betas, ed, ed_r, end_time, n_b, m_ab, T_diff_sums, T_diff_sums_r, Ris):
     """
@@ -508,7 +508,7 @@ def NLL_6_alpha_off_bp_jac(p, betas, ed, ed_r, end_time, n_b, m_ab, T_diff_sums,
     :return: block pair negative log-likelihood
     :rtype: float
     """
-    mu, alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr = p[:7]
+    mu, alpha_s, alpha_r, alpha_tc, alpha_gr, alpha_al, alpha_alr = p[:7]
     C = np.array(p[7:])
     Q = len(C)
     N_a = m_ab // n_b
@@ -521,7 +521,7 @@ def NLL_6_alpha_off_bp_jac(p, betas, ed, ed_r, end_time, n_b, m_ab, T_diff_sums,
     d_alphas[3] = (n_b - 1) * C @ T_diff_sums_r
     d_alphas[4] = (N_a - 1) * C @ T_diff_sums
     d_alphas[5] = (N_a - 1) * C @ T_diff_sums_r
-    d_C = (alpha_n + alpha_br * (n_b - 1) + alpha_al * (N_a - 1)) * T_diff_sums \
+    d_C = (alpha_s + alpha_tc * (n_b - 1) + alpha_al * (N_a - 1)) * T_diff_sums \
           + (alpha_r + alpha_gr * (n_b - 1) + alpha_alr * (N_a - 1)) * T_diff_sums_r
     # derivatives of third term
     for i in range(len(Ris)):
@@ -530,8 +530,8 @@ def NLL_6_alpha_off_bp_jac(p, betas, ed, ed_r, end_time, n_b, m_ab, T_diff_sums,
         numerator_alphas = np.zeros((Ris[i].shape[0], 6))
         numerator_C = []
         for q in range(Q):
-            numerator_C.append(betas[q]*( alpha_n * Ris[i][:, 0 + q * 6] + alpha_r * Ris[i][:, 1 + q * 6] +
-                                          alpha_br * Ris[i][:, 2 + q * 6] + alpha_gr * Ris[i][:,3 + q * 6] +
+            numerator_C.append(betas[q]*( alpha_s * Ris[i][:, 0 + q * 6] + alpha_r * Ris[i][:, 1 + q * 6] +
+                                          alpha_tc * Ris[i][:, 2 + q * 6] + alpha_gr * Ris[i][:,3 + q * 6] +
                                           alpha_al * Ris[i][:, 4 + q * 6] + alpha_alr * Ris[i][:,5 + q * 6]))
             denominator += C[q] * numerator_C[q]
             for j in range(6):
@@ -560,7 +560,7 @@ def fit_6_alpha_off_bp(ed, ed_r, end_time, n_b, m_ab, betas):
     Q = len(betas)
     # events_dict : (u,v):array_of_events
     if len(ed) == 0:  # handling empty block pair with no events
-        # (mu, alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr, C, betas)
+        # (mu, alpha_s, alpha_r, alpha_tc, alpha_gr, alpha_al, alpha_alr, C, betas)
         C = np.zeros(Q)
         return (1e-10, 0, 0, 0, 0, 0, 0, C, betas)
 
@@ -572,9 +572,9 @@ def fit_6_alpha_off_bp(ed, ed_r, end_time, n_b, m_ab, betas):
     # initialize parameters
     # mu_alpha_init = [1e-2, 2e-2, 2e-2, 1e-2, 1e-2]  # <-- fixed initialization
     mu_i = np.random.uniform(1e-6, 1e-2)
-    alpha_n_i, alpha_r_i = np.random.uniform(0.1, 0.5, 2)
-    alpha_br_i, alpha_gr_i, alpha_al_i, alpha_alr_i = np.random.uniform(1e-5, 0.1, 4)
-    mu_alpha_init = [mu_i, alpha_n_i, alpha_r_i, alpha_br_i, alpha_gr_i, alpha_al_i, alpha_alr_i] # <-- random initialization
+    alpha_s_i, alpha_r_i = np.random.uniform(0.1, 0.5, 2)
+    alpha_tc_i, alpha_gr_i, alpha_al_i, alpha_alr_i = np.random.uniform(1e-5, 0.1, 4)
+    mu_alpha_init = [mu_i, alpha_s_i, alpha_r_i, alpha_tc_i, alpha_gr_i, alpha_al_i, alpha_alr_i] # <-- random initialization
     C = [1 / Q] * Q  # <-- fixed initialization
     init_param = tuple(mu_alpha_init + C)
     # define bounds
@@ -587,20 +587,20 @@ def fit_6_alpha_off_bp(ed, ed_r, end_time, n_b, m_ab, betas):
     res = minimize(NLL_6_alpha_off_bp, init_param, method='L-BFGS-B', bounds=bounds, jac=NLL_6_alpha_off_bp_jac,
                    args=(betas, ed, ed_r, end_time, n_b, m_ab, T_diff_sums, T_diff_sums_r, Ris), tol=1e-12)
     results = res.x
-    mu, alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr = results[:7]
+    mu, alpha_s, alpha_r, alpha_tc, alpha_gr, alpha_al, alpha_alr = results[:7]
     C = np.array(results[7:])
 
     # scaling step -
     C_sum = np.sum(C)
     if C_sum != 0:
         C = C / C_sum
-        alpha_n = alpha_n * C_sum
+        alpha_s = alpha_s * C_sum
         alpha_r = alpha_r * C_sum
-        alpha_br = alpha_br * C_sum
+        alpha_tc = alpha_tc * C_sum
         alpha_gr = alpha_gr * C_sum
         alpha_al = alpha_al * C_sum
         alpha_alr = alpha_alr * C_sum
-    return (mu, alpha_n, alpha_r, alpha_br, alpha_gr, alpha_al, alpha_alr, C, betas)
+    return (mu, alpha_s, alpha_r, alpha_tc, alpha_gr, alpha_al, alpha_alr, C, betas)
 
 
 #%% 4-alpha diagonal block pair log-likelihood and fit functions
@@ -622,7 +622,7 @@ def cal_R_4_alpha_dia_bp(events_dict, betas):
         if num_events_uv == 0:
             Ris.append(np.array([0]))  # R=0 if node_pair (u,v) has no events
         else:
-            # 4*Q columns (alpha_n, alpha_r, alpha_br, alpha_gr)*Q
+            # 4*Q columns (alpha_s, alpha_r, alpha_tc, alpha_gr)*Q
             Ri = np.zeros((num_events_uv, 4 * Q))
             uv_intertimes = (uv_events[1:] - uv_events[:-1])
             # (#_uv_events-1, Q) array
@@ -632,7 +632,7 @@ def cal_R_4_alpha_dia_bp(events_dict, betas):
             for (x, y) in events_dict:
                 if x == u or y == u:
                     prev_index = 0
-                    # same node_pair events (alpha_n)
+                    # same node_pair events (alpha_s)
                     if (u, v) == (x, y):
                         for k in range(1, num_events_uv):
                             for q in range(Q):
@@ -642,7 +642,7 @@ def cal_R_4_alpha_dia_bp(events_dict, betas):
                         Ri_temp = get_Ri_temp_Q(uv_events, e_intertimes_Q, events_dict[(x, y)], betas)
                         for q in range(Q):
                             Ri[:, 1 + q * 4] = Ri_temp[:, q]
-                    # br node_pairs events (alpha_br)
+                    # br node_pairs events (alpha_tc)
                     elif u == x and v != y:
                         Ri_temp = get_Ri_temp_Q(uv_events, e_intertimes_Q, events_dict[(x, y)], betas)
                         for q in range(Q):
@@ -670,7 +670,7 @@ def LL_4_alpha_dia_bp(params, events_dict, end_time, n_a, m, T_diff_sums=None, R
     :return: block pair log-likelihood
     :rtype: float
     """
-    mu, alpha_n, alpha_r, alpha_br, alpha_gr, C, betas = params
+    mu, alpha_s, alpha_r, alpha_tc, alpha_gr, C, betas = params
     Q = len(betas)
     ##first term
     first = -m * mu * end_time
@@ -684,7 +684,7 @@ def LL_4_alpha_dia_bp(params, events_dict, end_time, n_a, m, T_diff_sums=None, R
         T_diff_sums = np.zeros(Q, )
         for q in range(Q):
             T_diff_sums[q] = np.sum(1 - np.exp(-betas[q] * T_diff))
-    second = -(alpha_n + alpha_r + (alpha_br + alpha_gr) * (n_a - 2)) * C @ T_diff_sums
+    second = -(alpha_s + alpha_r + (alpha_tc + alpha_gr) * (n_a - 2)) * C @ T_diff_sums
     ##third term
     if Ris is None:
         Ris = cal_R_4_alpha_dia_bp(events_dict, betas)
@@ -692,8 +692,8 @@ def LL_4_alpha_dia_bp(params, events_dict, end_time, n_a, m, T_diff_sums=None, R
     for i in range(len(Ris)):
         col_sum = np.zeros(Ris[i].shape[0])
         for q in range(Q):
-            col_sum[:] += C[q]*betas[q] * (alpha_n * Ris[i][:, 0 + q * 4] + alpha_r * Ris[i][:, 1 + q * 4] +
-                                  alpha_br * Ris[i][:, 2 + q * 4] + alpha_gr * Ris[i][:,3 + q * 4])
+            col_sum[:] += C[q]*betas[q] * (alpha_s * Ris[i][:, 0 + q * 4] + alpha_r * Ris[i][:, 1 + q * 4] +
+                                  alpha_tc * Ris[i][:, 2 + q * 4] + alpha_gr * Ris[i][:,3 + q * 4])
         col_sum += mu
         third += np.sum(np.log(col_sum))
     log_likelihood_value = first + second + third
@@ -716,19 +716,19 @@ def NLL_4_alpha_dia_bp(p, betas, events_dict, end_time, n_a, m, T_diff_sums, Ris
     :return: block pair negative log-likelihood
     :rtype: float
     """
-    mu, alpha_n, alpha_r, alpha_br, alpha_gr = p[:5]
+    mu, alpha_s, alpha_r, alpha_tc, alpha_gr = p[:5]
     C = np.array(p[5:])
 
     # scaling step - constaint C sums to 1
     C_sum = np.sum(C)
     if (C_sum != 0):
         C = C / C_sum
-        alpha_n = alpha_n * C_sum
+        alpha_s = alpha_s * C_sum
         alpha_r = alpha_r * C_sum
-        alpha_br = alpha_br * C_sum
+        alpha_tc = alpha_tc * C_sum
         alpha_gr = alpha_gr * C_sum
 
-    params = mu, alpha_n, alpha_r, alpha_br, alpha_gr, C, betas
+    params = mu, alpha_s, alpha_r, alpha_tc, alpha_gr, C, betas
     return -LL_4_alpha_dia_bp(params, events_dict, end_time, n_a, m, T_diff_sums, Ris)
 def NLL_4_alpha_dia_bp_jac(p, betas, events_dict, end_time, n_a, m, T_diff_sums, Ris):
     """
@@ -747,16 +747,16 @@ def NLL_4_alpha_dia_bp_jac(p, betas, events_dict, end_time, n_a, m, T_diff_sums,
     :param Ris: Optional list(size of events_dict)
     :return: jacobian array of negative log-likelihood function with respect to MULCH parameters
     """
-    mu, alpha_n, alpha_r, alpha_br, alpha_gr = p[:5]
+    mu, alpha_s, alpha_r, alpha_tc, alpha_gr = p[:5]
     C = np.array(p[5:])
     Q = len(C)
     # derivatives of second term
     d_mu = m * end_time
-    d_alpha_n = C @ T_diff_sums
+    d_alpha_s = C @ T_diff_sums
     d_alpha_r = C @ T_diff_sums
-    d_alpha_br = (n_a - 2) * C @ T_diff_sums
+    d_alpha_tc = (n_a - 2) * C @ T_diff_sums
     d_alpha_gr = (n_a - 2) * C @ T_diff_sums
-    d_C = (alpha_n + alpha_r + (n_a - 2) * (alpha_br + alpha_gr)) * T_diff_sums
+    d_C = (alpha_s + alpha_r + (n_a - 2) * (alpha_tc + alpha_gr)) * T_diff_sums
     # derivatives of third term
     for i in range(len(Ris)):
         denominator = np.zeros(Ris[i].shape[0])
@@ -764,20 +764,20 @@ def NLL_4_alpha_dia_bp_jac(p, betas, events_dict, end_time, n_a, m, T_diff_sums,
         numerator_alphas = np.zeros((Ris[i].shape[0], 4))
         numerator_C = []
         for q in range(Q):
-            numerator_C.append(betas[q]* (alpha_n * Ris[i][:, 0 + q * 4] + alpha_r * Ris[i][:, 1 + q * 4] +
-                               alpha_br * Ris[i][:, 2 + q * 4] + alpha_gr * Ris[i][:,3 + q * 4]))
+            numerator_C.append(betas[q]* (alpha_s * Ris[i][:, 0 + q * 4] + alpha_r * Ris[i][:, 1 + q * 4] +
+                               alpha_tc * Ris[i][:, 2 + q * 4] + alpha_gr * Ris[i][:,3 + q * 4]))
             denominator += C[q] * numerator_C[q]
             for j in range(4):
                 numerator_alphas[:, j] += C[q] * betas[q] * Ris[i][:, j + q * 4]
         denominator += mu
         d_mu -= np.sum(1 / denominator)
-        d_alpha_n -= np.sum(numerator_alphas[:, 0] / denominator)
+        d_alpha_s -= np.sum(numerator_alphas[:, 0] / denominator)
         d_alpha_r -= np.sum(numerator_alphas[:, 1] / denominator)
-        d_alpha_br -= np.sum(numerator_alphas[:, 2] / denominator)
+        d_alpha_tc -= np.sum(numerator_alphas[:, 2] / denominator)
         d_alpha_gr -= np.sum(numerator_alphas[:, 3] / denominator)
         for q in range(Q):
             d_C[q] -= np.sum(numerator_C[q] / denominator)
-    return np.hstack((d_mu, d_alpha_n, d_alpha_r, d_alpha_br, d_alpha_gr, d_C))
+    return np.hstack((d_mu, d_alpha_s, d_alpha_r, d_alpha_tc, d_alpha_gr, d_C))
 def fit_4_alpha_dia_bp(events_dict, end_time, n_a, m, betas):
     """
     fit mulch one diagonal block pair (a, b) - 4 excitations
@@ -794,7 +794,7 @@ def fit_4_alpha_dia_bp(events_dict, end_time, n_a, m, betas):
     Q = len(betas)
     # events_dict : (u,v):array_of_events
     if len(events_dict) == 0:  # handling empty block pair with no events
-        # (mu, alpha_n, alpha_r, alpha_br, alpha_gr, C, betas)
+        # (mu, alpha_s, alpha_r, alpha_tc, alpha_gr, C, betas)
         C = np.zeros(Q)
         return (1e-10, 0, 0, 0, 0, C, betas)
 
@@ -806,11 +806,11 @@ def fit_4_alpha_dia_bp(events_dict, end_time, n_a, m, betas):
     for q in range(Q):
         T_diff_sums[q] = np.sum(1 - np.exp(-betas[q] * T_diff))
 
-    # initialize parameters (mu, alpha_n, alpha_r, alpha_br, alpha_gr, c1, ..., cQ)
+    # initialize parameters (mu, alpha_s, alpha_r, alpha_tc, alpha_gr, c1, ..., cQ)
     mu_i = np.random.uniform(1e-6, 1e-2)
-    alpha_n_i, alpha_r_i = np.random.uniform(0.1, 0.5, 2)
-    alpha_br_i, alpha_gr_i = np.random.uniform(1e-5, 0.1, 2)
-    mu_alpha_init = [mu_i, alpha_n_i, alpha_r_i, alpha_br_i, alpha_gr_i] # <-- random initialization
+    alpha_s_i, alpha_r_i = np.random.uniform(0.1, 0.5, 2)
+    alpha_tc_i, alpha_gr_i = np.random.uniform(1e-5, 0.1, 2)
+    mu_alpha_init = [mu_i, alpha_s_i, alpha_r_i, alpha_tc_i, alpha_gr_i] # <-- random initialization
     # mu_alpha_init = [1e-2, 2e-2, 2e-2, 1e-2, 1e-2]  # <-- fixed initialization
     C = [1 / Q] * Q  # <-- fixed initialization
     init_param = tuple(mu_alpha_init + C)
@@ -823,19 +823,19 @@ def fit_4_alpha_dia_bp(events_dict, end_time, n_a, m, betas):
     res = minimize(NLL_4_alpha_dia_bp, init_param, method='L-BFGS-B', bounds=bounds, jac=NLL_4_alpha_dia_bp_jac,
                    args=(betas, events_dict, end_time, n_a, m, T_diff_sums, Ris), tol=1e-12)
     results = res.x
-    mu, alpha_n, alpha_r, alpha_br, alpha_gr = results[:5]
+    mu, alpha_s, alpha_r, alpha_tc, alpha_gr = results[:5]
     C = np.array(results[5:])
 
     # scaling step
     C_sum = np.sum(C)
     if C_sum != 0:
         C = C / C_sum
-        alpha_n = alpha_n * C_sum
+        alpha_s = alpha_s * C_sum
         alpha_r = alpha_r * C_sum
-        alpha_br = alpha_br * C_sum
+        alpha_tc = alpha_tc * C_sum
         alpha_gr = alpha_gr * C_sum
 
-    return (mu, alpha_n, alpha_r, alpha_br, alpha_gr, C, betas)
+    return (mu, alpha_s, alpha_r, alpha_tc, alpha_gr, C, betas)
 
 
 #%% 4-alpha off-diagonal block pair log-likelihood and fit functions
@@ -858,7 +858,7 @@ def cal_R_4_alpha_off_bp(events_dict, events_dict_r, betas):
         if num_events_uv == 0:
             Ris.append(np.array([0]))  # R=0 if node_pair (u,v) has no events
         else:
-            # 4*Q columns (alpha_n, alpha_r, alpha_br, alpha_gr)*Q
+            # 4*Q columns (alpha_s, alpha_r, alpha_tc, alpha_gr)*Q
             Ri = np.zeros((num_events_uv, 4 * Q))
             uv_intertimes = (uv_events[1:] - uv_events[:-1])
             # (#_uv_events-1, Q) array
@@ -870,12 +870,12 @@ def cal_R_4_alpha_off_bp(events_dict, events_dict_r, betas):
             for (x, y) in events_dict:
                 if x == u:
                     prev_index = 0
-                    # same node_pair events (alpha_n)
+                    # same node_pair events (alpha_s)
                     if (u, v) == (x, y):
                         for k in range(1, num_events_uv):
                             for q in range(Q):
                                 Ri[k, 0 + q * 4] = e_intertimes_Q[k - 1, q] * (1 + Ri[k - 1, 0 + q * 4])
-                    # br node_pairs events (alpha_br)
+                    # br node_pairs events (alpha_tc)
                     else:
                         Ri_temp = get_Ri_temp_Q(uv_events, e_intertimes_Q, events_dict[(x, y)], betas)
                         for q in range(Q):
@@ -915,7 +915,7 @@ def LL_4_alpha_off_bp(params, ed, ed_r, end_time, n_b, m_ab, T_diff_sums=None, T
     :rtype: float
     """
     # C: scaling parameters - same length as betas
-    mu, alpha_n, alpha_r, alpha_br, alpha_gr, C, betas = params
+    mu, alpha_s, alpha_r, alpha_tc, alpha_gr, C, betas = params
     Q = len(betas)
     ##first term
     first = -m_ab * mu * end_time
@@ -933,7 +933,7 @@ def LL_4_alpha_off_bp(params, ed, ed_r, end_time, n_b, m_ab, T_diff_sums=None, T
             T_diff = end_time - np.concatenate(events_array_r)
             for q in range(Q):
                 T_diff_sums_r[q] = np.sum(1 - np.exp(-betas[q] * T_diff))
-    second = -(alpha_n + alpha_br * (n_b - 1)) * C @ T_diff_sums
+    second = -(alpha_s + alpha_tc * (n_b - 1)) * C @ T_diff_sums
     second -= (alpha_r + alpha_gr * (n_b - 1)) * C @ T_diff_sums_r
     ##third term
     if Ris is None:
@@ -942,8 +942,8 @@ def LL_4_alpha_off_bp(params, ed, ed_r, end_time, n_b, m_ab, T_diff_sums=None, T
     for i in range(len(Ris)):
         col_sum = np.zeros(Ris[i].shape[0])
         for q in range(Q):
-            col_sum[:] += C[q] * betas[q]  * (alpha_n * Ris[i][:, 0 + q * 4] + alpha_r * Ris[i][:, 1 + q * 4] +
-                                              alpha_br * Ris[i][:, 2 + q * 4] + alpha_gr * Ris[i][:, 3 + q * 4])
+            col_sum[:] += C[q] * betas[q]  * (alpha_s * Ris[i][:, 0 + q * 4] + alpha_r * Ris[i][:, 1 + q * 4] +
+                                              alpha_tc * Ris[i][:, 2 + q * 4] + alpha_gr * Ris[i][:, 3 + q * 4])
         col_sum += mu
         third += np.sum(np.log(col_sum))
     log_likelihood_value = first + second + third
@@ -967,19 +967,19 @@ def NLL_4_alpha_off_bp(p, betas, ed, ed_r, end_time, n_b, m_ab, T_diff_sums, T_d
     :return: block pair negative log-likelihood
     :rtype: float
     """
-    mu, alpha_n, alpha_r, alpha_br, alpha_gr = p[:5]
+    mu, alpha_s, alpha_r, alpha_tc, alpha_gr = p[:5]
     C = np.array(p[5:])
 
     # scaling step - constaint C sums to 1
     C_sum = np.sum(C)
     if (C_sum != 0):
         C = C / C_sum
-        alpha_n = alpha_n * C_sum
+        alpha_s = alpha_s * C_sum
         alpha_r = alpha_r * C_sum
-        alpha_br = alpha_br * C_sum
+        alpha_tc = alpha_tc * C_sum
         alpha_gr = alpha_gr * C_sum
 
-    params = mu, alpha_n, alpha_r, alpha_br, alpha_gr, C, betas
+    params = mu, alpha_s, alpha_r, alpha_tc, alpha_gr, C, betas
     return -LL_4_alpha_off_bp(params, ed, ed_r, end_time, n_b, m_ab, T_diff_sums, T_diff_sums_r, Ris)
 def NLL_4_alpha_off_bp_jac(p, betas, ed, ed_r, end_time, n_b, m_ab, T_diff_sums, T_diff_sums_r, Ris):
     """
@@ -1000,16 +1000,16 @@ def NLL_4_alpha_off_bp_jac(p, betas, ed, ed_r, end_time, n_b, m_ab, T_diff_sums,
     :return: block pair negative log-likelihood
     :rtype: float
     """
-    mu, alpha_n, alpha_r, alpha_br, alpha_gr = p[:5]
+    mu, alpha_s, alpha_r, alpha_tc, alpha_gr = p[:5]
     C = np.array(p[5:])
     Q = len(C)
     # derivatives of second term
     d_mu = m_ab * end_time
-    d_alpha_n = C @ T_diff_sums
+    d_alpha_s = C @ T_diff_sums
     d_alpha_r = C @ T_diff_sums_r
-    d_alpha_br = (n_b - 1) * C @ T_diff_sums
+    d_alpha_tc = (n_b - 1) * C @ T_diff_sums
     d_alpha_gr = (n_b - 1) * C @ T_diff_sums_r
-    d_C = (alpha_n + (n_b - 1) * alpha_br) * T_diff_sums + (alpha_r + (n_b - 1) * alpha_gr) * T_diff_sums_r
+    d_C = (alpha_s + (n_b - 1) * alpha_tc) * T_diff_sums + (alpha_r + (n_b - 1) * alpha_gr) * T_diff_sums_r
     # derivatives of third term
     for i in range(len(Ris)):
         denominator = np.zeros(Ris[i].shape[0])
@@ -1017,20 +1017,20 @@ def NLL_4_alpha_off_bp_jac(p, betas, ed, ed_r, end_time, n_b, m_ab, T_diff_sums,
         numerator_alphas = np.zeros((Ris[i].shape[0], 4))
         numerator_C = []
         for q in range(Q):
-            numerator_C.append(betas[q]*( alpha_n * Ris[i][:, 0 + q * 4] + alpha_r * Ris[i][:, 1 + q * 4] +
-                                alpha_br * Ris[i][:, 2 + q * 4] + alpha_gr * Ris[i][:,3 + q * 4]))
+            numerator_C.append(betas[q]*( alpha_s * Ris[i][:, 0 + q * 4] + alpha_r * Ris[i][:, 1 + q * 4] +
+                                alpha_tc * Ris[i][:, 2 + q * 4] + alpha_gr * Ris[i][:,3 + q * 4]))
             denominator += C[q] * numerator_C[q]
             for j in range(4):
                 numerator_alphas[:, j] += C[q] * betas[q] * Ris[i][:, j + q * 4]
         denominator += mu
         d_mu -= np.sum(1 / denominator)
-        d_alpha_n -= np.sum(numerator_alphas[:, 0] / denominator)
+        d_alpha_s -= np.sum(numerator_alphas[:, 0] / denominator)
         d_alpha_r -= np.sum(numerator_alphas[:, 1] / denominator)
-        d_alpha_br -= np.sum(numerator_alphas[:, 2] / denominator)
+        d_alpha_tc -= np.sum(numerator_alphas[:, 2] / denominator)
         d_alpha_gr -= np.sum(numerator_alphas[:, 3] / denominator)
         for q in range(Q):
             d_C[q] -= np.sum(numerator_C[q] / denominator)
-    return np.hstack((d_mu, d_alpha_n, d_alpha_r, d_alpha_br, d_alpha_gr, d_C))
+    return np.hstack((d_mu, d_alpha_s, d_alpha_r, d_alpha_tc, d_alpha_gr, d_C))
 def fit_4_alpha_off_bp(ed, ed_r, end_time, n_b, m_ab, betas):
     """
     fit mulch one off-diagonal block pair (a, b) - 4 excitations
@@ -1048,7 +1048,7 @@ def fit_4_alpha_off_bp(ed, ed_r, end_time, n_b, m_ab, betas):
     Q = len(betas)
     # events_dict : (u,v):array_of_events
     if len(ed) == 0:  # handling empty block pair with no events
-        # (mu, alpha_n, alpha_r, alpha_br, alpha_gr, C, betas)
+        # (mu, alpha_s, alpha_r, alpha_tc, alpha_gr, C, betas)
         C = np.zeros(Q)
         return (1e-10, 0, 0, 0, 0, C, betas)
 
@@ -1070,9 +1070,9 @@ def fit_4_alpha_off_bp(ed, ed_r, end_time, n_b, m_ab, betas):
     # initialize parameters
     # mu_alpha_init = [1e-2, 2e-2, 2e-2, 1e-2, 1e-2]  # <-- fixed initialization
     mu_i = np.random.uniform(1e-6, 1e-2)
-    alpha_n_i, alpha_r_i = np.random.uniform(0.1, 0.5, 2)
-    alpha_br_i, alpha_gr_i = np.random.uniform(1e-5, 0.1, 2)
-    mu_alpha_init = [mu_i, alpha_n_i, alpha_r_i, alpha_br_i, alpha_gr_i] # <-- random initialization
+    alpha_s_i, alpha_r_i = np.random.uniform(0.1, 0.5, 2)
+    alpha_tc_i, alpha_gr_i = np.random.uniform(1e-5, 0.1, 2)
+    mu_alpha_init = [mu_i, alpha_s_i, alpha_r_i, alpha_tc_i, alpha_gr_i] # <-- random initialization
     C = [1 / Q] * Q  # <-- fixed initialization
     init_param = tuple(mu_alpha_init + C)
     # define bounds
@@ -1084,19 +1084,19 @@ def fit_4_alpha_off_bp(ed, ed_r, end_time, n_b, m_ab, betas):
     res = minimize(NLL_4_alpha_off_bp, init_param, method='L-BFGS-B', bounds=bounds, jac=NLL_4_alpha_off_bp_jac,
                    args=(betas, ed, ed_r, end_time, n_b, m_ab, T_diff_sums, T_diff_sums_r, Ris), tol=1e-12)
     results = res.x
-    mu, alpha_n, alpha_r, alpha_br, alpha_gr = results[:5]
+    mu, alpha_s, alpha_r, alpha_tc, alpha_gr = results[:5]
     C = np.array(results[5:])
 
     # scaling step -
     C_sum = np.sum(C)
     if C_sum != 0:
         C = C / C_sum
-        alpha_n = alpha_n * C_sum
+        alpha_s = alpha_s * C_sum
         alpha_r = alpha_r * C_sum
-        alpha_br = alpha_br * C_sum
+        alpha_tc = alpha_tc * C_sum
         alpha_gr = alpha_gr * C_sum
 
-    return (mu, alpha_n, alpha_r, alpha_br, alpha_gr, C, betas)
+    return (mu, alpha_s, alpha_r, alpha_tc, alpha_gr, C, betas)
 
 
 #%% 2-alpha diagonal block pair log-likelihood and fit functions
@@ -1119,7 +1119,7 @@ def cal_R_2_alpha_dia_bp(events_dict, betas):
         if num_events_uv == 0:
             Ris.append(np.array([0]))  # R=0 if node_pair (u,v) has no events
         else:
-            # 2*Q columns (alpha_n, alpha_r)*Q
+            # 2*Q columns (alpha_s, alpha_r)*Q
             Ri = np.zeros((num_events_uv, 2 * Q))
             uv_intertimes = (uv_events[1:] - uv_events[:-1])
             # (#_uv_events-1, Q) array
@@ -1129,7 +1129,7 @@ def cal_R_2_alpha_dia_bp(events_dict, betas):
             for (x, y) in events_dict:
                 if x == u or y == u:
                     prev_index = 0
-                    # same node_pair events (alpha_n)
+                    # same node_pair events (alpha_s)
                     if (u, v) == (x, y):
                         for k in range(1, num_events_uv):
                             for q in range(Q):
@@ -1162,7 +1162,7 @@ def LL_2_alpha_dia_bp(params, events_dict, end_time, n_a, m, T_diff_sums=None, R
     """
     calculate log-likelihood of one diagonal block pair - 2 excitation types
 
-    :param tuple params: MULCH block pair parameters (mu, alpha_1, .. alpha_n, C, betas)
+    :param tuple params: MULCH block pair parameters (mu, alpha_1, alpha_2, C, betas)
     :param dict dict events_dict: dictionary of events within a block pair (a, b),
         where {(u, v) node pair in (a, b) : [t1, t2, ..] array of events between (u, v)}
     :param float end_time: duration of the network
@@ -1173,7 +1173,7 @@ def LL_2_alpha_dia_bp(params, events_dict, end_time, n_a, m, T_diff_sums=None, R
     :return: block pair log-likelihood
     :rtype: float
     """
-    mu, alpha_n, alpha_r, C, betas = params
+    mu, alpha_s, alpha_r, C, betas = params
     Q = len(betas)
     ##first term
     first = -m * mu * end_time
@@ -1187,7 +1187,7 @@ def LL_2_alpha_dia_bp(params, events_dict, end_time, n_a, m, T_diff_sums=None, R
         T_diff_sums = np.zeros(Q, )
         for q in range(Q):
             T_diff_sums[q] = np.sum(1 - np.exp(-betas[q] * T_diff))
-    second = -(alpha_n + alpha_r) * C @ T_diff_sums
+    second = -(alpha_s + alpha_r) * C @ T_diff_sums
     ##third term
     if Ris is None:
         Ris = cal_R_2_alpha_dia_bp(events_dict, betas)
@@ -1195,7 +1195,7 @@ def LL_2_alpha_dia_bp(params, events_dict, end_time, n_a, m, T_diff_sums=None, R
     for i in range(len(Ris)):
         col_sum = np.zeros(Ris[i].shape[0])
         for q in range(Q):
-            col_sum[:] += C[q] * betas[q] * (alpha_n * Ris[i][:, 0 + q * 2] + alpha_r * Ris[i][:, 1 + q * 2])
+            col_sum[:] += C[q] * betas[q] * (alpha_s * Ris[i][:, 0 + q * 2] + alpha_r * Ris[i][:, 1 + q * 2])
         col_sum += mu
         third += np.sum(np.log(col_sum))
     log_likelihood_value = first + second + third
@@ -1206,7 +1206,7 @@ def NLL_2_alpha_dia_bp(p, betas, events_dict, end_time, n_a, m, T_diff_sums, Ris
 
     called by scipy.minimize() function for parameters estimation
 
-    :param tuple p: MULCH block pair raveled parameters (mu, alpha_1, .., alpha_6, C_1, .., C_Q )
+    :param tuple p: MULCH block pair raveled parameters (mu, alpha_1, alpha_2, C_1, .., C_Q )
     :param betas: (Q,) array of decays
     :param dict events_dict: dictionary of events within a block pair (a, b),
         where {(u, v) node pair in (a, b) : [t1, t2, ..] array of events between (u, v)}
@@ -1218,17 +1218,17 @@ def NLL_2_alpha_dia_bp(p, betas, events_dict, end_time, n_a, m, T_diff_sums, Ris
     :return: block pair negative log-likelihood
     :rtype: float
     """
-    mu, alpha_n, alpha_r = p[:3]
+    mu, alpha_s, alpha_r = p[:3]
     C = np.array(p[3:])
 
     # scaling step - constaint C sums to 1
     C_sum = np.sum(C)
     if (C_sum != 0):
         C = C / C_sum
-        alpha_n = alpha_n * C_sum
+        alpha_s = alpha_s * C_sum
         alpha_r = alpha_r * C_sum
 
-    params = mu, alpha_n, alpha_r, C, betas
+    params = mu, alpha_s, alpha_r, C, betas
     return -LL_2_alpha_dia_bp(params, events_dict, end_time, n_a, m, T_diff_sums, Ris)
 def NLL_2_alpha_dia_bp_jac(p, betas, events_dict, end_time, n_a, m, T_diff_sums, Ris):
     """
@@ -1247,14 +1247,14 @@ def NLL_2_alpha_dia_bp_jac(p, betas, events_dict, end_time, n_a, m, T_diff_sums,
     :param Ris: Optional list(size of events_dict)
     :return: jacobian array of negative log-likelihood function with respect to MULCH parameters
     """
-    mu, alpha_n, alpha_r = p[:3]
+    mu, alpha_s, alpha_r = p[:3]
     C = np.array(p[3:])
     Q = len(C)
     # derivatives of second term
     d_mu = m * end_time
-    d_alpha_n = C @ T_diff_sums
+    d_alpha_s = C @ T_diff_sums
     d_alpha_r = C @ T_diff_sums
-    d_C = (alpha_n + alpha_r) * T_diff_sums
+    d_C = (alpha_s + alpha_r) * T_diff_sums
     # derivatives of third term
     for i in range(len(Ris)):
         denominator = np.zeros(Ris[i].shape[0])
@@ -1262,17 +1262,17 @@ def NLL_2_alpha_dia_bp_jac(p, betas, events_dict, end_time, n_a, m, T_diff_sums,
         numerator_alphas = np.zeros((Ris[i].shape[0], 2))
         numerator_C = []
         for q in range(Q):
-            numerator_C.append(betas[q] * (alpha_n * Ris[i][:, 0 + q * 2] + alpha_r * Ris[i][:, 1 + q * 2]))
+            numerator_C.append(betas[q] * (alpha_s * Ris[i][:, 0 + q * 2] + alpha_r * Ris[i][:, 1 + q * 2]))
             denominator += C[q] * numerator_C[q]
             for j in range(2):
                 numerator_alphas[:, j] += C[q] * betas[q] * Ris[i][:, j + q * 2]
         denominator += mu
         d_mu -= np.sum(1 / denominator)
-        d_alpha_n -= np.sum(numerator_alphas[:, 0] / denominator)
+        d_alpha_s -= np.sum(numerator_alphas[:, 0] / denominator)
         d_alpha_r -= np.sum(numerator_alphas[:, 1] / denominator)
         for q in range(Q):
             d_C[q] -= np.sum(numerator_C[q] / denominator)
-    return np.hstack((d_mu, d_alpha_n, d_alpha_r, d_C))
+    return np.hstack((d_mu, d_alpha_s, d_alpha_r, d_C))
 def fit_2_alpha_dia_bp(events_dict, end_time, n_a, m, betas):
     """
     fit mulch one diagonal block pair (a, b) - 2 excitations
@@ -1283,13 +1283,13 @@ def fit_2_alpha_dia_bp(events_dict, end_time, n_a, m, betas):
     :param int n_a: number of nodes in block a
     :param int m: number of node pairs in the diagonal block pair
     :param betas: (Q,) array of decays
-    :return: estimated parameters (mu, alpha_1,.. , alpha_n, C, betas)
+    :return: estimated parameters (mu, alpha_1, alpha_2, C, betas)
     :rtype: tuple
     """
     Q = len(betas)
     # events_dict : (u,v):array_of_events
     if len(events_dict) == 0:  # handling empty block pair with no events
-        # (mu, alpha_n, alpha_r, C, betas)
+        # (mu, alpha_s, alpha_r, C, betas)
         C = np.zeros(Q)
         return (1e-10, 0, 0, C, betas)
 
@@ -1301,10 +1301,10 @@ def fit_2_alpha_dia_bp(events_dict, end_time, n_a, m, betas):
     for q in range(Q):
         T_diff_sums[q] = np.sum(1 - np.exp(-betas[q] * T_diff))
 
-    # initialize parameters (mu, alpha_n, alpha_r, c1, ..., cQ)
+    # initialize parameters (mu, alpha_s, alpha_r, c1, ..., cQ)
     mu_i = np.random.uniform(1e-6, 1e-2)
-    alpha_n_i, alpha_r_i = np.random.uniform(0.1, 0.5, 2)
-    mu_alpha_init = [mu_i, alpha_n_i, alpha_r_i] # <-- random initialization
+    alpha_s_i, alpha_r_i = np.random.uniform(0.1, 0.5, 2)
+    mu_alpha_init = [mu_i, alpha_s_i, alpha_r_i] # <-- random initialization
     # mu_alpha_init = [1e-2, 2e-2, 2e-2]  # <-- fixed initialization
     C = [1 / Q] * Q  # <-- fixed initialization
     init_param = tuple(mu_alpha_init + C)
@@ -1317,17 +1317,17 @@ def fit_2_alpha_dia_bp(events_dict, end_time, n_a, m, betas):
     res = minimize(NLL_2_alpha_dia_bp, init_param, method='L-BFGS-B', bounds=bounds, jac=NLL_2_alpha_dia_bp_jac,
                    args=(betas, events_dict, end_time, n_a, m, T_diff_sums, Ris), tol=1e-12)
     results = res.x
-    mu, alpha_n, alpha_r = results[:3]
+    mu, alpha_s, alpha_r = results[:3]
     C = np.array(results[3:])
 
     # scaling step
     C_sum = np.sum(C)
     if C_sum != 0:
         C = C / C_sum
-        alpha_n = alpha_n * C_sum
+        alpha_s = alpha_s * C_sum
         alpha_r = alpha_r * C_sum
 
-    return (mu, alpha_n, alpha_r, C, betas)
+    return (mu, alpha_s, alpha_r, C, betas)
 
 #%% 2-alpha off-diagonal block pair log-likelihood and fit functions
 def cal_R_2_alpha_off_bp(events_dict, events_dict_r, betas):
@@ -1349,7 +1349,7 @@ def cal_R_2_alpha_off_bp(events_dict, events_dict_r, betas):
         if num_events_uv == 0:
             Ris.append(np.array([0]))  # R=0 if node_pair (u,v) has no events
         else:
-            # 2*Q columns (alpha_n, alpha_r)*Q
+            # 2*Q columns (alpha_s, alpha_r)*Q
             Ri = np.zeros((num_events_uv, 2 * Q))
             uv_intertimes = (uv_events[1:] - uv_events[:-1])
             # (#_uv_events-1, Q) array
@@ -1359,7 +1359,7 @@ def cal_R_2_alpha_off_bp(events_dict, events_dict_r, betas):
 
             # loop through node pairs in block pair ab
             for (x, y) in events_dict:
-                # same node_pair events (alpha_n)
+                # same node_pair events (alpha_s)
                 if (u, v) == (x, y):
                     for k in range(1, num_events_uv):
                         for q in range(Q):
@@ -1395,7 +1395,7 @@ def LL_2_alpha_off_bp(params, ed, ed_r, end_time, n_b, m_ab, T_diff_sums=None, T
     """
     calculate log-likelihood of one off-diagonal block pair - 4 excitation types
 
-    :param tuple params: MULCH block pair parameters (mu, alpha_1, .. alpha_n, C, betas)
+    :param tuple params: MULCH block pair parameters (mu, alpha_1, alpha_2, C, betas)
     :param dict ed: dictionary of events within a block pair (a, b),
         where {(u, v) node pair in (a, b) : [t1, t2, ..] array of events between (u, v)}
     :param dict ed_r: dictionary of events within reciprocal block pair (b, a)
@@ -1408,7 +1408,7 @@ def LL_2_alpha_off_bp(params, ed, ed_r, end_time, n_b, m_ab, T_diff_sums=None, T
     :rtype: float
     """
     # C: scaling parameters - same length as betas
-    mu, alpha_n, alpha_r, C, betas = params
+    mu, alpha_s, alpha_r, C, betas = params
     Q = len(betas)
     ##first term
     first = -m_ab * mu * end_time
@@ -1426,7 +1426,7 @@ def LL_2_alpha_off_bp(params, ed, ed_r, end_time, n_b, m_ab, T_diff_sums=None, T
             T_diff = end_time - np.concatenate(events_array_r)
             for q in range(Q):
                 T_diff_sums_r[q] = np.sum(1 - np.exp(-betas[q] * T_diff))
-    second = -alpha_n * C @ T_diff_sums
+    second = -alpha_s * C @ T_diff_sums
     second -= alpha_r * C @ T_diff_sums_r
     ##third term
     if Ris is None:
@@ -1435,7 +1435,7 @@ def LL_2_alpha_off_bp(params, ed, ed_r, end_time, n_b, m_ab, T_diff_sums=None, T
     for i in range(len(Ris)):
         col_sum = np.zeros(Ris[i].shape[0])
         for q in range(Q):
-            col_sum[:] += C[q] * betas[q] * (alpha_n * Ris[i][:, 0 + q * 2] + alpha_r * Ris[i][:, 1 + q * 2])
+            col_sum[:] += C[q] * betas[q] * (alpha_s * Ris[i][:, 0 + q * 2] + alpha_r * Ris[i][:, 1 + q * 2])
         col_sum += mu
         third += np.sum(np.log(col_sum))
     log_likelihood_value = first + second + third
@@ -1459,17 +1459,17 @@ def NLL_2_alpha_off_bp(p, betas, ed, ed_r, end_time, n_b, m_ab, T_diff_sums, T_d
     :return: block pair negative log-likelihood
     :rtype: float
     """
-    mu, alpha_n, alpha_r = p[:3]
+    mu, alpha_s, alpha_r = p[:3]
     C = np.array(p[3:])
 
     # scaling step - constaint C sums to 1
     C_sum = np.sum(C)
     if (C_sum != 0):
         C = C / C_sum
-        alpha_n = alpha_n * C_sum
+        alpha_s = alpha_s * C_sum
         alpha_r = alpha_r * C_sum
 
-    params = mu, alpha_n, alpha_r, C, betas
+    params = mu, alpha_s, alpha_r, C, betas
     return -LL_2_alpha_off_bp(params, ed, ed_r, end_time, n_b, m_ab, T_diff_sums, T_diff_sums_r, Ris)
 def NLL_2_alpha_off_bp_jac(p, betas, ed, ed_r, end_time, n_b, m_ab, T_diff_sums, T_diff_sums_r, Ris):
     """
@@ -1490,14 +1490,14 @@ def NLL_2_alpha_off_bp_jac(p, betas, ed, ed_r, end_time, n_b, m_ab, T_diff_sums,
     :return: block pair negative log-likelihood
     :rtype: float
     """
-    mu, alpha_n, alpha_r = p[:3]
+    mu, alpha_s, alpha_r = p[:3]
     C = np.array(p[3:])
     Q = len(C)
     # derivatives of second term
     d_mu = m_ab * end_time
-    d_alpha_n = C @ T_diff_sums
+    d_alpha_s = C @ T_diff_sums
     d_alpha_r = C @ T_diff_sums_r
-    d_C = alpha_n * T_diff_sums + alpha_r * T_diff_sums_r
+    d_C = alpha_s * T_diff_sums + alpha_r * T_diff_sums_r
     # derivatives of third term
     for i in range(len(Ris)):
         denominator = np.zeros(Ris[i].shape[0])
@@ -1505,17 +1505,17 @@ def NLL_2_alpha_off_bp_jac(p, betas, ed, ed_r, end_time, n_b, m_ab, T_diff_sums,
         numerator_alphas = np.zeros((Ris[i].shape[0], 2))
         numerator_C = []
         for q in range(Q):
-            numerator_C.append(betas[q] * (alpha_n * Ris[i][:, 0 + q * 2] + alpha_r * Ris[i][:, 1 + q * 2]))
+            numerator_C.append(betas[q] * (alpha_s * Ris[i][:, 0 + q * 2] + alpha_r * Ris[i][:, 1 + q * 2]))
             denominator += C[q] * numerator_C[q]
             for j in range(2):
                 numerator_alphas[:, j] += C[q] * betas[q] * Ris[i][:, j + q * 2]
         denominator += mu
         d_mu -= np.sum(1 / denominator)
-        d_alpha_n -= np.sum(numerator_alphas[:, 0] / denominator)
+        d_alpha_s -= np.sum(numerator_alphas[:, 0] / denominator)
         d_alpha_r -= np.sum(numerator_alphas[:, 1] / denominator)
         for q in range(Q):
             d_C[q] -= np.sum(numerator_C[q] / denominator)
-    return np.hstack((d_mu, d_alpha_n, d_alpha_r, d_C))
+    return np.hstack((d_mu, d_alpha_s, d_alpha_r, d_C))
 def fit_2_alpha_off_bp(ed, ed_r, end_time, n_b, m_ab, betas):
     """
     fit mulch one off-diagonal block pair (a, b) - 2 excitations
@@ -1527,13 +1527,13 @@ def fit_2_alpha_off_bp(ed, ed_r, end_time, n_b, m_ab, betas):
     :param int n_b: number of nodes in block b
     :param int m_ab: number of node pairs in off-diagonal block pair (a, b)
     :param betas: (Q,) array of decays
-    :return: estimated parameters (mu, alpha_1,.. , alpha_n, C, betas)
+    :return: estimated parameters (mu, alpha_1, alpha_2, C, betas)
     :rtype: tuple
     """
     Q = len(betas)
     # events_dict : (u,v):array_of_events
     if len(ed) == 0:  # handling empty block pair with no events
-        # (mu, alpha_n, alpha_r, C, betas)
+        # (mu, alpha_s, alpha_r, C, betas)
         C = np.zeros(Q)
         return (1e-10, 0, 0, C, betas)
 
@@ -1552,10 +1552,10 @@ def fit_2_alpha_off_bp(ed, ed_r, end_time, n_b, m_ab, betas):
         for q in range(Q):
             T_diff_sums_r[q] = np.sum(1 - np.exp(-betas[q] * T_diff))
 
-    # initialize parameters (mu, alpha_n, alpha_r, c1, ..., cQ)
+    # initialize parameters (mu, alpha_s, alpha_r, c1, ..., cQ)
     mu_i = np.random.uniform(1e-6, 1e-2)
-    alpha_n_i, alpha_r_i = np.random.uniform(0.1, 0.5, 2)
-    mu_alpha_init = [mu_i, alpha_n_i, alpha_r_i] # <-- random initialization
+    alpha_s_i, alpha_r_i = np.random.uniform(0.1, 0.5, 2)
+    mu_alpha_init = [mu_i, alpha_s_i, alpha_r_i] # <-- random initialization
     # mu_alpha_init = [1e-2, 2e-2, 2e-2]  # <-- fixed initialization
     C = [1 / Q] * Q  # <-- fixed initialization
     init_param = tuple(mu_alpha_init + C)
@@ -1568,17 +1568,17 @@ def fit_2_alpha_off_bp(ed, ed_r, end_time, n_b, m_ab, betas):
     res = minimize(NLL_2_alpha_off_bp, init_param, method='L-BFGS-B', bounds=bounds, jac=NLL_2_alpha_off_bp_jac,
                    args=(betas, ed, ed_r, end_time, n_b, m_ab, T_diff_sums, T_diff_sums_r, Ris), tol=1e-12)
     results = res.x
-    mu, alpha_n, alpha_r = results[:3]
+    mu, alpha_s, alpha_r = results[:3]
     C = np.array(results[3:])
 
     # scaling step -
     C_sum = np.sum(C)
     if C_sum != 0:
         C = C / C_sum
-        alpha_n = alpha_n * C_sum
+        alpha_s = alpha_s * C_sum
         alpha_r = alpha_r * C_sum
 
-    return (mu, alpha_n, alpha_r, C, betas)
+    return (mu, alpha_s, alpha_r, C, betas)
 
 
 #%% detailed log-likelihood functions

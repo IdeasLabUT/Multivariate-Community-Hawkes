@@ -12,10 +12,10 @@ import pickle
 from scipy import integrate
 from bisect import bisect_left
 
-import utils_fit_model as mulch_utils
+import utils_fit_model as fit_model
 from utils_accuracy_tests import cal_recip_trans_motif, calculate_auc
 from utils_fit_bp import cal_num_events
-from mulch_MID_test import load_data_train_all
+
 
 sys.path.append("./CHIP-Network-Model")
 # import generative_model_utils as utils
@@ -83,9 +83,9 @@ def simulate_count_motif_experiment_chip_bhm(chip, dataset_motif, param, nodes_m
 
 def bhm_predict_probs_and_actual(t0, delta, n_nodes, events_dict_all, params_tup, K, node_mem):
     # event_dictionaries for block pairs
-    bp_events_dict_all = mulch_utils.events_dict_to_events_dict_bp(events_dict_all, node_mem, K)
+    bp_events_dict_all = fit_model.events_dict_to_events_dict_bp(events_dict_all, node_mem, K)
     # number of node pairs per block pair & number of nodes in one block
-    bp_M, n_nodes_b = mulch_utils.num_nodes_pairs_per_block_pair(node_mem, K)
+    bp_M, n_nodes_b = fit_model.num_nodes_pairs_per_block_pair(node_mem, K)
     bp_mu, bp_alpha, bp_beta = params_tup
     predict = np.zeros((n_nodes, n_nodes))  # Predicted probs that link exists
     # node pairs in same block pair have equal probabilities - store to avoid re-calculations
@@ -172,7 +172,7 @@ if __name__ == "__main__":
     K_range = range(1, 2)  # range(1, 11)
 
     """ model fitting """
-    fit_model = True    # false means read a saved fit
+    FIT_MODEL = True    # false means read a saved fit
     save_fit = False    # remember to set save path
 
 
@@ -211,7 +211,7 @@ if __name__ == "__main__":
         n_events_all = cal_num_events(events_dict_all)
     elif dataset == "MID":
         file_path_csv = os.path.join(os.getcwd(), "storage", "datasets", "MID", "MID.csv")
-        train_tup, all_tup, nodes_not_in_train = mulch_utils.read_csv_split_train(file_path_csv, delimiter=',')
+        train_tup, all_tup, nodes_not_in_train = fit_model.read_csv_split_train(file_path_csv, delimiter=',')
         events_dict_train, T_train, n_nodes_train, n_events_train, id_node_map_train = train_tup
         events_dict_all, T_all, n_nodes_all, n_events_all, id_node_map_all = all_tup
         motif_delta = 4
@@ -220,7 +220,7 @@ if __name__ == "__main__":
     else:
         facebook_path = os.path.join(os.getcwd(), "storage", "datasets", "facebook_filtered",
                                      "facebook-wall-filtered.txt")
-        train_tup, all_tup, nodes_not_in_train = mulch_utils.read_csv_split_train(facebook_path, delimiter=' ')
+        train_tup, all_tup, nodes_not_in_train = fit_model.read_csv_split_train(facebook_path, delimiter=' ')
         events_dict_train, T_train, n_nodes_train, n_events_train, id_node_map_train = train_tup
         events_dict_all, T_all, n_nodes_all, n_events_all, id_node_map_all = all_tup
 
@@ -324,7 +324,7 @@ if __name__ == "__main__":
         else:
             print("K = ", K)
             try:
-                if fit_model:
+                if FIT_MODEL:
                     # Fitting the model to the train data
                     node_mem_train, bp_mu_t, bp_alpha_t, bp_beta_t, events_dict_bp_train = bhm_utils.fit_block_model(events_dict_train,
                         n_nodes_train, T_train, K, local_search_max_iter=200, local_search_n_cores=0, verbose=False)
