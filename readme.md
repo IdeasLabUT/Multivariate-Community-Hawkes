@@ -70,7 +70,7 @@ To clone, use `git clone --recurse-submodules` + repo URL
 
 which will automatically initialize and update CHIP as a submodule in `CHIP-Network-Model directory.
 
-Or alternatively, run the following commands from MULCH directory after cloning:
+Alternatively, run the following commands from MULCH directory after cloning:
 ```
 git submodule init
 git submodule update
@@ -114,7 +114,7 @@ Note: `tick`'s package is only need for ADM4 test.
       in our datasets were rescaled to be in the range [0; 1000]. See the following `betas`
       suggestions for MID and Reality Mining datasets:
         - MID (duration=8380
-          days) `betas = np.reciprocal(np.array([2*30, 2*7, 1/2]) * (1000 / 8380))  # [2months, 2weeks, 12hours]`
+          days) `betas = np.reciprocal(np.array([2*30, 2*7, 1/2]) * (1000 / 8380))  # [2months, 2weeks, 1/2day]`
         - Reality Mining (duration=150
           days) `betas = np.reciprocal(np.array([7, 2, 1/24]) * (1000 / 150) ) # [1week, 2day, 1hours]`
     - `max_iter_ref`: Maximum number of nodes membership refinement & fit iterations. Default
