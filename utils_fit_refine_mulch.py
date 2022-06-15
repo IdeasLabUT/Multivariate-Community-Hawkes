@@ -1,7 +1,4 @@
 """fit MULCH + node membership refinement function"""
-# TODO: refinement function can be moved to sum betas model fit fileF
-# TODO: rename all refinement functions
-# TODO: remove model_fit_cal_log_likelihood_sum_betas() function
 
 import numpy as np
 import time
@@ -121,7 +118,8 @@ def fit_refinement_mulch(events_dict, n, end_time, K, betas, n_alpha=6, max_ref_
     ref_tuple = (nodes_mem0, fit_param0, np.sum(LL_bp0), num_events, refinement_fit_time)
     return sp_tuple, ref_tuple, message
 
-def cal_new_event_dict_bp(idx, from_block, to_block, events_dict_bp, K):
+
+def cal_new_event_dict_move_node(idx, from_block, to_block, events_dict_bp, K):
     """ calculate new per block_pair events_dict of moving one node (idx) from one block to another """
     events_dict_bp1 = copy.deepcopy(events_dict_bp)
     # move node pair from (a,*) to (b,*)
@@ -138,6 +136,7 @@ def cal_new_event_dict_bp(idx, from_block, to_block, events_dict_bp, K):
                 events_dict_bp1[k][to_block][i, j] = timestamps
     return events_dict_bp1
 
+
 def cal_new_LL_move_node(param_tup, T, idx, from_block, to_block, events_dict_bp, n_K, LL_bp, batch = True):
     """ calculate new per block_pair log-likelihoods of moving one node (idx) from one block to another """
     K = len(n_K)
@@ -149,7 +148,7 @@ def cal_new_LL_move_node(param_tup, T, idx, from_block, to_block, events_dict_bp
         mu_bp, alpha_s_bp, alpha_r_bp, C_bp, betas = param_tup
 
     # calculate events_dict_bp after moving node_i
-    events_dict_bp1 = cal_new_event_dict_bp(idx, from_block, to_block, events_dict_bp, K)
+    events_dict_bp1 = cal_new_event_dict_move_node(idx, from_block, to_block, events_dict_bp, K)
 
     # calculate new n_nodes_per_class
     N_c1 = np.copy(n_K)
@@ -190,6 +189,7 @@ def cal_new_LL_move_node(param_tup, T, idx, from_block, to_block, events_dict_bp
     else:
         return events_dict_bp1, N_c1, LL_bp1
 
+
 def get_nodes_mem_refinement(nodes_mem, events_dict_bp, param, end_time, n_K, LL_bp):
     """
     calculate new refined nodes membership given current node membership and MULCH fit parameters
@@ -221,11 +221,10 @@ def get_nodes_mem_refinement(nodes_mem, events_dict_bp, param, end_time, n_K, LL
 
 
 
-
-
-#%% main
+#%% Simulate, fit, and refine example
 
 if __name__ == "__main__":
+
     np.set_printoptions(suppress=True)
     K, N, T_all = 3, 60, 1000  # number of nodes and duration
     n_alpha = 6
@@ -241,14 +240,14 @@ if __name__ == "__main__":
     C_sim = np.array([[[0.33, 0.34, 0.33], [0.33, 0.34, 0.33], [0.33, 0.34, 0.33]]] * K)
     betas = np.array([0.01, 0.1, 20])
     # 1) simulate from 6-alpha sum of kernels model
-    sim_param = (
-    mu_sim, alpha_s_sim, alpha_r_sim, alpha_tc_sim, alpha_gr_sim, alpha_al_sim, alpha_alr_sim, C_sim, betas)
+    sim_param = ( mu_sim, alpha_s_sim, alpha_r_sim, alpha_tc_sim, alpha_gr_sim, alpha_al_sim,
+                  alpha_alr_sim, C_sim, betas)
     betas = sim_param[-1]
-    print(f"{n_alpha}-alpha Sum of Kernels model simultion at K={K}, N={N}, not balanced membership")
+    print(f"{n_alpha}-alpha Sum of Kernels model simulation at K={K}, N={N}, unbalanced membership")
     print("betas = ", betas)
     events_dict, nodes_mem_true = simulate_mulch(sim_param, N, K, p, T_all)
     n_events_all = fit_bp.cal_num_events(events_dict)
-    print("n_events simulated = ", n_events_all)
+    print("number of simulated events= ", n_events_all)
     agg_adj = fit_model.event_dict_to_aggregated_adjacency(N, events_dict)
     fit_model.plot_adj(agg_adj, nodes_mem_true, K, "True membership")
 

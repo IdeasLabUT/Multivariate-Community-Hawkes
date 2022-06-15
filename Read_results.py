@@ -3,257 +3,79 @@ import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 np.set_printoptions(suppress=True)
+from utils_fit_model import print_mulch_param
 
+
+def plot_motif_matix(motif, vmax, mape, title, save_pdf):
+    fig, ax = plt.subplots(figsize=(5, 4))
+    c = ax.pcolor(motif, cmap='Blues', vmin=0, vmax=vmax)
+    ax.invert_yaxis()
+    ax.set_xticks(np.arange(6) + 0.5)
+    ax.set_yticks(np.arange(6) + 0.5)
+    ax.set_xticklabels(np.arange(1, 7))
+    ax.set_yticklabels(np.arange(1, 7))
+    fig.colorbar(c, ax=ax)
+    fig.tight_layout()
+    if save_pdf:
+        fig.savefig(f"{fig_path}/{title}.pdf")
+    else:
+        ax.set_title(f'{title}, MAPE={mape:.1f}')
+    plt.show()
 
 #%% tests
 
 if __name__ == "__main__":
     MBHM_loop = False
     CHIP_loop = False
-    save = True
 
-    # dataset = "Enron"
-    dataset = "RealityMining"
-    # dataset = "MID"
-    motif_delta = "week"
-    # motif_delta = "month"
-    betas = "2month1week2hour" # 2week1day2hour_all
-    results_path = f"/shared/Results/MultiBlockHawkesModel/MotifCounts/{dataset}"
-    fig_path = f"/shared/Results/MultiBlockHawkesModel/figures/{dataset}"
+    save_pdf = False
 
-    # with open(f"Datasets_motif_counts/{motif_delta}_{dataset}_counts.p", 'rb') as f:
+
+    # dataset = "RealityMining"
+    # motif_delta = "week"    # 'week'or 'month'
+    # results_path = f"/shared/Results/MultiBlockHawkesModel/MotifCounts/{dataset}"
+    # fig_path = f"/shared/Results/MultiBlockHawkesModel/figures/{dataset}"
+    #
+    # with open(f"storage/datasets_motif_counts/{motif_delta}_{dataset}_counts.p", 'rb') as f:
     #     Mcounts = pickle.load(f)
-    # dataset_counts = Mcounts["dataset_motif"]
+    # motifs = Mcounts["dataset_motif"]
     # print(f"actual at delta = 1 {motif_delta}")
-    # print(np.asarray(dataset_counts, dtype=int))
+    # print(np.asarray(motifs, dtype=int))
     #
-    # if save:
-    #     # read best of 3 models
-    #     pickle_file_name = f"{results_path}/old/1week2days1hour/k7.p"  # 1week2days1_4day  2week2days1_4day
-    #     with open(pickle_file_name, 'rb') as f:
-    #         results_dict = pickle.load(f)
-    #         sim_counts_mbhm = results_dict[f"sim_motif_avg_{motif_delta}"]
-    #         mape_res_mbhm = results_dict['mape']
-    #         print(f"\nmotif count at K=7")
-    #         print(np.asarray(results_dict[f"sim_motif_avg_{motif_delta}"], dtype=int))
-    #         print(mape_res_mbhm)
-    #     with open(f"/shared/Results/MultiBlockHawkesModel/MotifCounts/CHIP/{dataset}/k4.p", 'rb') as f:
-    #         results_dict_chip = pickle.load(f)
-    #         sim_counts_chip = results_dict_chip[f"sim_motif_avg_{motif_delta}"]
-    #         print(f"\nCHIP motif count at K=4")
-    #         print(np.asarray(results_dict_chip[f"sim_motif_avg_{motif_delta}"], dtype=int))
-    #         mape_res_chip = results_dict_chip['mape']
-    #         print(mape_res_chip)
-    #     with open(f"/shared/Results/MultiBlockHawkesModel/MotifCounts/BHM/{dataset}/k11.p", 'rb') as f:
-    #         results_dict_bhm = pickle.load(f)
-    #         sim_counts_bhm = results_dict_bhm[f"sim_motif_avg_{motif_delta}"]
-    #         print(f"\nbhm motif count at K=11")
-    #         print(np.asarray(results_dict_bhm[f"sim_motif_avg_{motif_delta}"], dtype=int))
-    #         mape_res_bhm = results_dict_bhm['mape']
-    #         print(mape_res_bhm)
+    # # read best of 3 models
+    # pickle_file_name = f"{results_path}/old/1week2days1hour/k7.p"
+    # with open(pickle_file_name, 'rb') as f:
+    #     results_dict = pickle.load(f)
+    #     motifs1 = results_dict[f"sim_motif_avg_{motif_delta}"]
+    #     mape1 = results_dict['mape']
+    #     print(f"\nmotif count  6alpha_K7")
+    #     print(np.asarray(results_dict[f"sim_motif_avg_{motif_delta}"], dtype=int))
+    #     print(mape1)
     #
-    #     dataset_max = np.max(dataset_counts)
-    #     max_mbhm = np.max(sim_counts_mbhm)
-    #     max_bhm = np.max(sim_counts_bhm)
-    #     # max_chip = np.max(sim_counts_chip)
-    #     vmax = np.max([dataset_max, max_mbhm, max_bhm])
+    # with open(f"/shared/Results/MultiBlockHawkesModel/MotifCounts/{dataset}/4alpha/ref/k9.p", 'rb') as f:
+    #     results_dict_chip = pickle.load(f)
+    #     motifs2 = results_dict_chip[f"sim_motif_avg"]
+    #     print(f"\nmotif count  4alpha_K9")
+    #     print(np.asarray(motifs2, dtype=int))
+    #     mape2 = results_dict_chip['mape']
+    #     print(mape2)
     #
-    #     fig, ax = plt.subplots(figsize=(5, 4))
-    #     c = ax.pcolor(dataset_counts, cmap='Blues', vmin=0, vmax=vmax)
-    #     ax.invert_yaxis()
-    #     ax.set_xticks(np.arange(6) + 0.5)
-    #     ax.set_yticks(np.arange(6) + 0.5)
-    #     ax.set_xticklabels(np.arange(1, 7))
-    #     ax.set_yticklabels(np.arange(1, 7))
-    #     # ax.set_title(f'{dataset} Actual at delta={motif_delta}')
-    #     fig.colorbar(c, ax=ax)
-    #     fig.tight_layout()
-    #     fig.savefig(f"{fig_path}/Actual{dataset}Motifs.pdf")
-    #     plt.show()
+    # with open(f"/shared/Results/MultiBlockHawkesModel/MotifCounts/{dataset}/2alpha/ref/k3.p", 'rb') as f:
+    #     results_dict_bhm = pickle.load(f)
+    #     motifs3 = results_dict_bhm[f"sim_motif_avg"]
+    #     print(f"\nmotif count  2alpha_K3")
+    #     print(np.asarray(motifs3, dtype=int))
+    #     mape3= results_dict_bhm['mape']
+    #     print(mape3)
     #
-    #     fig, ax = plt.subplots(figsize=(5, 4))
-    #     c = ax.pcolor(sim_counts_mbhm, cmap='Blues', vmin=0, vmax=vmax)
-    #     ax.invert_yaxis()
-    #     ax.set_xticks(np.arange(6) + 0.5)
-    #     ax.set_yticks(np.arange(6) + 0.5)
-    #     ax.set_xticklabels(np.arange(1,7))
-    #     ax.set_yticklabels(np.arange(1,7))
-    #     # ax.set_title(f'sim counts MAPE={mape_res_mbhm:.1f}')
-    #     fig.colorbar(c, ax=ax)
-    #     fig.tight_layout()
-    #     fig.savefig(f"{fig_path}/mbhm_new.pdf")
-    #     plt.show()
+    # dataset_max = np.max(motifs)
+    # vmax = np.max([dataset_max, np.max(motifs1), np.max(motifs2), np.max(motifs3)])
     #
-    #     fig, ax = plt.subplots(figsize=(5, 4))
-    #     c = ax.pcolor(sim_counts_chip, cmap='Blues', vmin=0, vmax=vmax)
-    #     ax.invert_yaxis()
-    #     ax.set_xticks(np.arange(6) + 0.5)
-    #     ax.set_yticks(np.arange(6) + 0.5)
-    #     ax.set_xticklabels(np.arange(1, 7))
-    #     ax.set_yticklabels(np.arange(1, 7))
-    #     # ax.set_title(f'sim counts MAPE={mape_res_chip:.1f}')
-    #     fig.colorbar(c, ax=ax)
-    #     fig.tight_layout()
-    #     fig.savefig(f"{fig_path}/chip_new.pdf")
-    #     plt.show()
-    #
-    #     fig, ax = plt.subplots(figsize=(5, 4))
-    #     c = ax.pcolor(sim_counts_bhm, cmap='Blues', vmin=0, vmax=vmax)
-    #     ax.invert_yaxis()
-    #     ax.set_xticks(np.arange(6) + 0.5)
-    #     ax.set_yticks(np.arange(6) + 0.5)
-    #     ax.set_xticklabels(np.arange(1, 7))
-    #     ax.set_yticklabels(np.arange(1, 7))
-    #     # ax.set_title(f'sim counts at K=11, MAPE={mape_res_bhm:.1f}')
-    #     fig.colorbar(c, ax=ax)
-    #     fig.tight_layout()
-    #     fig.savefig(f"{fig_path}/bhm_new.pdf")
-    #     plt.show()
-    #
-    # if MBHM_loop:
-    #     mape_res = {}
-    #     mape_res_med = {}
-    #     motif_counts = {}
-    #     motif_counts_med = {}
-    #     for K in range(3, 11):
-    #         pickle_file_name = f"{results_path}/{betas}/k{K}.p" #  1week2days1_4day
-    #         with open(pickle_file_name, 'rb') as f:
-    #             results_dict = pickle.load(f)
-    #
-    #             print(f"\nmotif count at K = {K}")
-    #             sim_counts = results_dict[f"sim_motif_avg_{motif_delta}"]
-    #             print(np.asarray(results_dict[f"sim_motif_avg_{motif_delta}"], dtype=int))
-    #             mape_res[K] = 100 / 36 * np.sum(np.abs(sim_counts - (dataset_counts+1)) / (dataset_counts+1))
-    #             print("average mape = ", mape_res[K])
-    #             motif_counts[K] = sim_counts
-    #
-    #             sim_counts_med = results_dict[f"sim_motif_median_{motif_delta}"]
-    #             print(np.asarray(results_dict[f"sim_motif_median_{motif_delta}"], dtype=int))
-    #             mape_res_med[K] = 100 / 36 * np.sum(np.abs(sim_counts_med - (dataset_counts + 1)) / (dataset_counts + 1))
-    #             print("Median mape = ", mape_res_med[K])
-    #             motif_counts_med[K] = sim_counts_med
-    #
-    #     plt.plot(list(mape_res.keys()), list(mape_res.values()), 'g*-', markersize=12, label="MAPE score - Average")
-    #     # plt.xlabel("K")
-    #     # plt.ylim((0, 500))
-    #     # plt.ylabel("MAPE score")
-    #     # plt.show()
-    #
-    #     plt.plot(list(mape_res_med.keys()), list(mape_res_med.values()), 'r*-', markersize=12, label="MAPE score - Median")
-    #     plt.xlabel("K")
-    #     plt.ylim((0, 300))
-    #     # plt.ylabel("MAPE score - Median")
-    #     plt.legend()
-    #     plt.show()
-    #
-    #     PLOT = True
-    #     median = True
-    #     best1 = 5
-    #     best2 = 7
-    #     if PLOT:
-    #         # path = "/shared/Results/MultiBlockHawkesModel/figures/figures2"
-    #         if not median:
-    #             sim_counts_1 = motif_counts[best1]
-    #             sim_counts_2 = motif_counts[best2]
-    #         else:
-    #             sim_counts_1 = motif_counts_med[best1]
-    #             sim_counts_2 = motif_counts_med[best2]
-    #         dataset_max = np.max(dataset_counts)
-    #         sim_max1 = np.max(sim_counts_1)
-    #         sim_max2 = np.max(sim_counts_2)
-    #         vmax = np.max([dataset_max, sim_max1, sim_max2])
-    #
-    #         fig, ax = plt.subplots(figsize=(5,4))
-    #         c = ax.pcolor(dataset_counts, cmap='Blues', vmin=0, vmax=vmax)
-    #         ax.invert_yaxis()
-    #         ax.set_title(f'{dataset} Actual motifs count at delta={motif_delta}')
-    #         fig.colorbar(c, ax=ax)
-    #         fig.tight_layout()
-    #         # fig.savefig(f"{path}/Actual{dataset}Motifs.pdf")
-    #         plt.show()
-    #
-    #         fig, ax = plt.subplots(figsize=(5,4))
-    #         c = ax.pcolor(sim_counts_1, cmap='Blues', vmin=0, vmax=vmax)
-    #         ax.invert_yaxis()
-    #         if not median:
-    #             ax.set_title(f'sim counts at K={best1}, MAPE={mape_res[best1]:.1f}')
-    #         else:
-    #             ax.set_title(f'Median - sim counts at K={best1}, MAPE={mape_res_med[best1]:.1f}')
-    #         fig.colorbar(c, ax=ax)
-    #         fig.tight_layout()
-    #         # fig.savefig(f"{path}/KernelSumFull{dataset}Motifs.pdf")
-    #         plt.show()
-    #
-    #         fig, ax = plt.subplots(figsize=(5, 4))
-    #         c = ax.pcolor(sim_counts_2, cmap='Blues', vmin=0, vmax=vmax)
-    #         ax.invert_yaxis()
-    #         if not median:
-    #             ax.set_title(f'sim counts at K={best2}, MAPE={mape_res[best2]:.1f}')
-    #         else:
-    #             ax.set_title(f'Median - sim counts at K={best2}, MAPE={mape_res_med[best2]:.1f}')
-    #         fig.colorbar(c, ax=ax)
-    #         fig.tight_layout()
-    #         # fig.savefig(f"{path}/KernelSumFull{dataset}Motifs.pdf")
-    #         plt.show()
-    #
-    # if CHIP_loop:
-    #     mape_res_chip = {}
-    #     motif_counts_chip = {}
-    #     rangeK = [4,5,6,7,14,20,45]
-    #     for K in range(1,15):
-    #         pickle_file_name = f"/shared/Results/MultiBlockHawkesModel/MotifCounts/CHIP/{dataset}/k{K}.p"
-    #         with open(pickle_file_name, 'rb') as f:
-    #             results_dict_chip = pickle.load(f)
-    #             sim_counts_chip = results_dict_chip[f"sim_motif_avg_{motif_delta}"]
-    #             print(f"\n\nmotif count at K = {K}")
-    #             print(np.asarray(results_dict_chip[f"sim_motif_avg_{motif_delta}"], dtype=int))
-    #             mape_res_chip[K] = results_dict_chip['mape']
-    #             print(f"MAPE={mape_res_chip[K]:.1f}, recip={results_dict_chip['sim_recip_avg']:.3f},"
-    #                   f", trans={results_dict_chip['sim_trans_avg']:.3f}, , n_events={results_dict_chip['sim_n_events_avg']:.0f}")
-    #             motif_counts_chip[K] = sim_counts_chip
-    #     plt.plot(list(mape_res_chip.keys()), list(mape_res_chip.values()), 'g*', markersize=12)
-    #     plt.xlabel("K")
-    #     plt.ylabel("MAPE score")
-    #     plt.show()
-    #
-    #     PLOT = True
-    #     best1_chip = 9
-    #     best2_chip = 9
-    #     if PLOT:
-    #         # path = "/shared/Results/MultiBlockHawkesModel/figures/figures2"
-    #         sim_counts_1_chip = motif_counts_chip[best1_chip]
-    #         sim_counts_2_chip = motif_counts_chip[best2_chip]
-    #         dataset_max = np.max(dataset_counts)
-    #         sim_max1_chip = np.max(sim_counts_1_chip)
-    #         sim_max2_chip = np.max(sim_counts_2_chip)
-    #         vmax = np.max([dataset_max, sim_max1_chip, sim_max2_chip])
-    #
-    #         fig, ax = plt.subplots(figsize=(5,4))
-    #         c = ax.pcolor(dataset_counts, cmap='Blues', vmin=0, vmax=vmax)
-    #         ax.invert_yaxis()
-    #         ax.set_title(f'{dataset} Actual count at delta={motif_delta}')
-    #         fig.colorbar(c, ax=ax)
-    #         fig.tight_layout()
-    #         # fig.savefig(f"{path}/Actual{dataset}Motifs.pdf")
-    #         plt.show()
-    #
-    #         fig, ax = plt.subplots(figsize=(5,4))
-    #         c = ax.pcolor(sim_counts_1_chip, cmap='Blues', vmin=0, vmax=vmax)
-    #         ax.invert_yaxis()
-    #         ax.set_title(f'sim counts at K={best1_chip}, MAPE={mape_res_chip[best1_chip]:.1f}')
-    #         fig.colorbar(c, ax=ax)
-    #         fig.tight_layout()
-    #         # fig.savefig(f"{path}/KernelSumFull{dataset}Motifs.pdf")
-    #         plt.show()
-    #
-    #         fig, ax = plt.subplots(figsize=(5, 4))
-    #         c = ax.pcolor(sim_counts_2_chip, cmap='Blues', vmin=0, vmax=vmax)
-    #         ax.invert_yaxis()
-    #         ax.set_title(f'sim counts at K={best2_chip}, MAPE={mape_res_chip[best2_chip]:.1f}')
-    #         fig.colorbar(c, ax=ax)
-    #         fig.tight_layout()
-    #         # fig.savefig(f"{path}/KernelSumFull{dataset}Motifs.pdf")
-    #         plt.show()
+    # plot_motif_matix(motifs, vmax, 0, 'actual', save_pdf)
+    # plot_motif_matix(motifs1, vmax, mape1, '6alpha_K7', save_pdf)
+    # plot_motif_matix(motifs2, vmax, mape2, '4alpha_K9', save_pdf)
+    # plot_motif_matix(motifs3, vmax, mape3, '2alpha_K3', save_pdf)
+
 
 
     # # read bhm fit results
@@ -282,13 +104,13 @@ if __name__ == "__main__":
 
 
 
-    # # read refinement results
+    # # # read refinement results
     # np.set_printoptions(precision=3)
-    # results_path = "/shared/Results/MultiBlockHawkesModel/Facebook/6alpha_KernelSum"
-    # results_path = f"/shared/Results/MultiBlockHawkesModel/MID/6alpha_KernelSum_Ref_batch/2month2week1_2day"
-    # results_path = "/shared/Results/MultiBlockHawkesModel/RealityMining/6alpha_KernelSum_Ref_batch/old/1week2days1hour"
-    # results_path = "/shared/Results/MultiBlockHawkesModel/Enron/6alpha_KernelSum_Ref_batch/old/1week2days1_4day"
-    # results_path = "/shared/Results/MultiBlockHawkesModel/FacebookFiltered/no_ref"
+    # # results_path = "/shared/Results/MultiBlockHawkesModel/Facebook/6alpha_KernelSum"
+    # # results_path = f"/shared/Results/MultiBlockHawkesModel/MID/6alpha_KernelSum_Ref_batch/2month2week1_2day"
+    # results_path = "/shared/Results/MultiBlockHawkesModel/RealityMining/2alpha/ref"
+    # # results_path = "/shared/Results/MultiBlockHawkesModel/Enron/6alpha_KernelSum_Ref_batch/old/1week2days1_4day"
+    # # results_path = "/shared/Results/MultiBlockHawkesModel/FacebookFiltered/no_ref"
     # for k in range(1,11):
     #     pickle_file_name = f"{results_path}/k_{k}.p"
     #     with open(pickle_file_name, 'rb') as f:
@@ -296,38 +118,43 @@ if __name__ == "__main__":
     #     # print(f"{results_dict_s['ll_train_sp']:.3f}\t{results_dict_s['ll_all_sp']:.3f}"
     #     #       f"\t{results_dict_s['ll_test_sp']:.3f}")
     #     print(f"{results_dict_s['ll_train_ref']:.3f}\t{results_dict_s['ll_all_ref']:.3f}\t{results_dict_s['ll_test_ref']:.3f}"
-    #           f"\t{results_dict_s['fit_time(s)']/60:.3f}")
-        # print(f"{results_dict_s['ll_train']:.3f}\t{results_dict_s['ll_all']:.3f}"
-        #       f"\t{results_dict_s['ll_test']:.3f}\t{results_dict_s['fit_time(s)'] / 60/60:.3f}")
-        # print("\n")
+    #           f"\t{results_dict_s['fit_time_ref(s)']/60:.3f}")
+    #     # print(f"{results_dict_s['ll_train_ref']:.3f}\t{results_dict_s['ll_all_ref']:.3f}"
+    #     #       f"\t{results_dict_s['ll_test_ref']:.3f}\t{results_dict_s['fit_time(s)'] / 60:.3f}")
 
+
+
+    # # # # print mulch parameters
+    # pickle_file_name = f"{results_path}/k_3.p"
+    # with open(pickle_file_name, 'rb') as f:
+    #     fit_dict = pickle.load(f)
+    # print_mulch_param(fit_dict['fit_param_ref'])
+
+
+    # # read link prediction AUC results
+    # auc_path = "/shared/Results/MultiBlockHawkesModel/AUC/MID/6alpha"
+    # for K in range(1, 11):
+    #     file_name = f"{auc_path}/auc_k{K}.p"
+    #     with open(file_name, 'rb') as f:
+    #         auc_dict = pickle.load(f)
+    #     print(f"{auc_dict['avg']:.5f}\t{auc_dict['std']:.5f}")
+    #     # print(f"auc={auc_dict['avg']}, std={auc_dict['std']}, ll_test{auc_dict['ll_test']}")
 
     # read link prediction AUC results
-    auc_path = "/shared/Results/MultiBlockHawkesModel/AUC"
-    file_name = f"{auc_path}/RealityMining_auc_K_2.p"
-    with open(file_name, 'rb') as f:
-        auc_dict = pickle.load(f)
-    print(f"auc={auc_dict['avg']}, std={auc_dict['std']}, ll_test{auc_dict['ll_test']}")
-
-
-    # # read no ref dataset results - ONLY for ICML submission
-    # no_ref_path = "/shared/Results/MultiBlockHawkesModel/Enron/no_ref_2alpha"
-    # for k in range(1,11):
-    #     file_name = f"{no_ref_path}/k_{k}.p"
-    #     with open(file_name, 'rb') as f:
-    #         no_dict = pickle.load(f)
-    #     print(f"{no_dict['ll_train']:.3f}\t{no_dict['ll_all']:.3f}\t{no_dict['ll_test']:.3f}"
-    #           f"\t{no_dict['fit_time(s)']/60:.3f}")
-
-
+    auc_path = "/shared/Results/MultiBlockHawkesModel/BHM/AUC/Enron"
+    for K in [1,2,6,11,16] + [12,13,14,15] + list(range(17,40, 2)):
+        file_name = f"{auc_path}/auc_K_{K}.p"
+        with open(file_name, 'rb') as f:
+            auc_dict = pickle.load(f)
+        print(f"{K}\t{auc_dict['avg']:.5f}\t{auc_dict['std']:.5f}")
 
     # # find mape score
-    # path = "/shared/Results/MultiBlockHawkesModel/MotifCounts/RealityMining/no_ref_alpha2"
-    # for k in range(1, 11):
+    # path = "/shared/Results/MultiBlockHawkesModel/MotifCounts/RealityMining/6alpha/2week1day2hour"
+    # for k in range(3, 11):
     #     file_name = f"{path}/k{k}.p"
     #     with open(file_name, 'rb') as f:
     #         dict1 = pickle.load(f)
-    #     print(k, dict1['mape'])
+    #     print(f"{dict1['mape']:.3f}")
 
 
     # with open(f"Datasets_motif_counts/{motif_delta}_{dataset}_counts.p", 'rb') as f:

@@ -7,14 +7,10 @@ import matplotlib.pyplot as plt
 import sys
 import os
 from sklearn import metrics
+
 sys.path.append("./CHIP-Network-Model")
 from dataset_utils import load_and_combine_nodes_for_test_train
 from utils_fit_bp import cal_num_events
-
-
-        
-
-
 
 # # ROC curves
 # results_path = "/shared/Results/MultiBlockHawkesModel/LSH_tests/BHM"
@@ -42,6 +38,41 @@ from utils_fit_bp import cal_num_events
 #         plt.tight_layout()
 #     plt.show()
 #     fig.savefig(f"{results_path}/{dataset}_BHM_ROC.pdf")
+
+
+def plot_motif_matix(motif, vmax, mape, title):
+    fig, ax = plt.subplots(figsize=(5, 4))
+    c = ax.pcolor(motif, cmap='Blues', vmin=0, vmax=vmax)
+    ax.invert_yaxis()
+    ax.set_xticks(np.arange(6) + 0.5)
+    ax.set_yticks(np.arange(6) + 0.5)
+    ax.set_xticklabels(np.arange(1, 7))
+    ax.set_yticklabels(np.arange(1, 7))
+    fig.colorbar(c, ax=ax)
+    ax.set_title(f'{title}, MAPE={mape:.1f}')
+    plt.show()
+
+path = "/shared/Results/MultiBlockHawkesModel/CHIP/motif_counts/RealityMining/sim30"
+for k in range(1,11):
+    file_name = f"{path}/k{k}.p"
+    with open(file_name, 'rb') as f:
+        dict1 = pickle.load(f)
+    dataset_motif = dict1["dataset_motif"]
+    motif_all = dict1['sim_motif_all']
+    motif_median = np.median(motif_all, axis=0)
+    # mape_all = np.zeros(len(motif_all))
+    # mape_all = dict1['mape_all']
+    # motif_median = dict1['sim_motif_median']
+    # for run in range(len(motif_all)):
+        # mape_all[run] = 100 / 36 * np.sum(np.abs(motif_all[run] - (dataset_motif + 1)) / (dataset_motif + 1))
+        # print(f'run={run}, mape={mape_all[run]:.1f}')
+    mape_median = 100 / 36 * np.sum(np.abs(motif_median - (dataset_motif + 1)) / (dataset_motif + 1))
+    print(f'{dict1["mape"]:.1f}\t{mape_median:.1f}')
+    # print(f'K={k}, mape={dict1["mape"]:.1f} avg(mape)={np.average(mape_all):.1f}, SE(mape)={np.std(mape_all)/np.sqrt(dict1["n_simulation"]):.1f}\n')
+
+    # max_ = max(dict1['dataset_motif'].max(), motif_median.max())
+    # plot_motif_matix(dict1['dataset_motif'], max_, 0, 'actual')
+    # plot_motif_matix(motif_median, max_, mape_median, f'K={k}')
 
 
 

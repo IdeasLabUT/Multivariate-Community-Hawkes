@@ -1,27 +1,23 @@
-##########################
+"""
+A class to simulate from multivariate Hawkes process (exponential kernel)
 
-# Implementation of MAP EM algorithm for Hawkes process
-#  described in:
-#  https://stmorse.github.io/docs/orc-thesis.pdf
-#  https://stmorse.github.io/docs/6-867-final-writeup.pdf
-# For usage see README
+Modified by Hadeel Soliman to extend simulation to sum of exponential kernels
+with scaling parameters.
+
 # For license see LICENSE
-# Author: Steven Morse
+# Original Author: Steven Morse
 # Email: steventmorse@gmail.com
 # License: MIT License (see LICENSE in top folder)
 
+Modified by Hadeel Soliman
 
-# modified by Hadeel Soliman Feb 7, 2021
-# modified by Hadeel Soliman May 23, 2021
-
-##########################
+"""
 
 
 import numpy as np
-import matplotlib.pyplot as plt
 
 
-class MHP_Kernels_2:
+class MHP_Kernels:
     def __init__(self, mu=[0.1], alpha=[[0.5]], C=[1], C_r=None, betas=[1]):
         '''
         mu: (M,) np.array
@@ -155,66 +151,4 @@ class MHP_Kernels_2:
                 self.data = self.data[self.data[:, 0] < horizon]
                 return self.data
 
-    # -----------
-    # VISUALIZATION METHODS
-    # -----------
 
-    def get_rate(self, ct, d):
-        # return rate at time ct in dimension d
-        seq = np.array(self.data)
-        if not np.all(ct > seq[:, 0]): seq = seq[seq[:, 0] < ct]
-        return self.mu[d] + \
-               np.sum([self.alpha_beta[d, int(j)] * self.omega * np.exp(-self.omega * (ct - t)) for t, j in seq])
-
-    def plot_rates(self, horizon=-1):
-
-        if horizon < 0:
-            horizon = np.amax(self.data[:, 0])
-
-        f, axarr = plt.subplots(self.dim * 2, 1, sharex='col',
-                                gridspec_kw={'height_ratios': sum([[3, 1] for i in range(self.dim)], [])},
-                                figsize=(8, self.dim * 2))
-        xs = np.linspace(0, horizon, (horizon / 100.) * 1000)
-        for i in range(self.dim):
-            row = i * 2
-
-            # plot rate
-            r = [self.get_rate(ct, i) for ct in xs]
-            axarr[row].plot(xs, r, 'k-')
-            axarr[row].set_ylim([-0.01, np.amax(r) + (np.amax(r) / 2.)])
-            axarr[row].set_ylabel('$\lambda(t)_{%d}$' % i, fontsize=14)
-            r = []
-
-            # plot events
-            subseq = self.data[self.data[:, 1] == i][:, 0]
-            axarr[row + 1].plot(subseq, np.zeros(len(subseq)) - 0.5, 'bo', alpha_beta=0.2)
-            axarr[row + 1].yaxis.set_visible(False)
-
-            axarr[row + 1].set_xlim([0, horizon])
-
-        plt.tight_layout()
-
-    def plot_events(self, horizon=-1, showDays=True, labeled=True):
-        if horizon < 0:
-            horizon = np.amax(self.data[:, 0])
-        fig = plt.figure(figsize=(10, 2))
-        ax = plt.gca()
-        for i in range(self.dim):
-            subseq = self.data[self.data[:, 1] == i][:, 0]
-            plt.plot(subseq, np.zeros(len(subseq)) - i, 'bo', alpha_beta=0.2)
-
-        if showDays:
-            for j in range(1, int(horizon)):
-                plt.plot([j, j], [-self.dim, 1], 'k:', alpha_beta=0.15)
-
-        if labeled:
-            ax.set_yticklabels('')
-            ax.set_yticks(-np.arange(0, self.dim), minor=True)
-            ax.set_yticklabels([r'$e_{%d}$' % i for i in range(self.dim)], minor=True)
-        else:
-            ax.yaxis.set_visible(False)
-
-        ax.set_xlim([0, horizon])
-        ax.set_ylim([-self.dim, 1])
-        ax.set_xlabel('Days')
-        plt.tight_layout()

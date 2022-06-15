@@ -1,4 +1,5 @@
-"""MULCH fit and log-likelihood functions (full model level)
+"""
+MULCH fit and log-likelihood functions (full model level)
 
 The script also includes:
  - read_csv_split_train() to read dataset csv files
@@ -8,6 +9,7 @@ The script also includes:
     - plot_mulch_param()
     - plot_kernel()
     - plot_adj()
+    -
 
 @author: Hadeel Soliman
 """
@@ -620,9 +622,7 @@ def plot_mulch_param(params, n_alpha):
         ax.set_yticklabels(np.arange(1, 5))
         ax.invert_yaxis()
         fig.colorbar(plot, ax=ax)
-        fig.tight_layout()
         ax.set_title(param_name[i]) # comment to save as pdf
-        # fig.savefig(f"/shared/Results/MultiBlockHawkesModel/figures/MID_casestudy/{param_name[i]}.pdf")
         plt.show()
 
 def plot_kernel(alpha, betas, C, time_range):
@@ -654,34 +654,23 @@ def print_mulch_param(params):
     print("\nalpha_r")
     print(params[2])
     classes = np.shape(params[0])[0]
-    if len(params) == 5:
-        print("\nC")
-        for i in range(classes):
-            for j in range(classes):
-                print(params[3][i, j, :], end='\t')
-            print(" ")
-    else:
+    if len(params) > 5:
         print("\nalpha_tc")
         print(params[3])
         print("\nalpha_gr")
         print(params[4])
-        if len(params) == 7:
-            print("\nC")
-            for i in range(classes):
-                for j in range(classes):
-                    print(params[5][i, j, :], end='\t')
-                print(" ")
-        elif len(params) == 9:
+        if len(params) > 7:
             print("\nalpha_al")
             print(params[5])
             print("\nalpha_alr")
             print(params[6])
-            print("\nC")
-            for i in range(classes):
-                for j in range(classes):
-                    print(params[7][i, j, :], end='\t')
-                print(" ")
-
+    print("\nC")
+    for i in range(classes):
+        for j in range(classes):
+            print(params[-2][i, j, :], end='\t')
+        print(" ")
+    print("\nbetas")
+    print(params[-1])
 
 def analyze_block(node_mem, K, id_node_map):
     """print nodes in each block, given id_node_map
@@ -698,3 +687,23 @@ def analyze_block(node_mem, K, id_node_map):
         for id in nodes_in_class_i:
             print(id_node_map[id], end=' ')
         print()
+
+def plot_motif_matrix(motif, vmax, mape=0, title=''):
+    """plot motifs count (6, 6) matrix
+
+    :param motif: (6,6) array of motif counts
+    :param vmax: maximum value for color bar
+    :param mape: (optional) MAPE score
+    :param title: (optional) figure's title
+    """
+    fig, ax = plt.subplots(figsize=(5, 4))
+    c = ax.pcolor(motif, cmap='Blues', vmin=0, vmax=vmax)
+    ax.invert_yaxis()
+    ax.set_xticks(np.arange(6) + 0.5)
+    ax.set_yticks(np.arange(6) + 0.5)
+    ax.set_xticklabels(np.arange(1, 7))
+    ax.set_yticklabels(np.arange(1, 7))
+    fig.colorbar(c, ax=ax)
+    if title != '':
+        ax.set_title(f'{title}, MAPE={mape:.1f}')
+    plt.show()

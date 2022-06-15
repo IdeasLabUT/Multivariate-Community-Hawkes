@@ -2,8 +2,6 @@
 
 @author: Hadeel Soliman
 """
-# TODO rearrange and rename functions
-# TODO add doctsring
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,93 +11,6 @@ import time
 import utils_generate_model as generate_bp
 
 
-
-# %% helper functions
-
-def plot_kernel(alpha, betas, C, time_range):
-    """plot decay kernel of one block pair"""
-    lambda_sum = []
-    for t in time_range:
-        lambda_sum.append( alpha*np.sum(betas * C * np.exp(-t*betas)))
-    plt.figure()
-    plt.plot(time_range, lambda_sum, color='red', label=f"betas1={betas}")
-    plt.xlabel("t(s)")
-    plt.ylabel("lambda(t)")
-    plt.yscale('log')
-    plt.title('sum of kernels C=[0.33, 0.33, 0.34] - different betas')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
-
-
-def print_param_kernels(param):
-    """print parameters of one block pair"""
-    if len(param) == 9:
-        print(f"C = {param[7]}")
-        print(f"mu={param[0]:.7f}, alpha_s={param[1]:.4f}, alpha_r={param[2]:.4f}, alpha_tc={param[3]:.4f},"
-              f" alpha_gr={param[4]:.4f}, alpha_al={param[5]:.4f}, alpha_alr={param[6]:.4f}")
-    elif len(param) == 7:
-        print(f"C = {param[5]}")
-        print(f"mu={param[0]:.7f}, alpha_s={param[1]:.4f}, alpha_r={param[2]:.4f}, alpha_tc={param[3]:.4f},"
-              f" alpha_gr={param[4]:.4f}")
-    elif len(param) == 5:
-        print(f"C = {param[3]}")
-        print(f"mu={param[0]:.7f}, alpha_s={param[1]:.4f}, alpha_r={param[2]:.4f}")
-
-
-def cal_num_events(events_dict):
-    """calculate number of events in an event_dict"""
-    num_events = 0
-    for events_array in events_dict.values():
-        num_events += len(events_array)
-    return num_events
-
-
-def get_Ri_temp_Q(uv_events, e_intertimes_Q, xy_events, betas):
-    """block pair log-likelihood calculation helper function"""
-    Q = len(betas)
-    num_events_uv = len(uv_events)
-    Ri_temp = np.zeros((num_events_uv, Q))
-    prev_index = 0
-    for k in range(0, num_events_uv):
-        # return index below which t(x,y) < kth event of (u,v)
-        # if no events exists returns len(events(x,y))
-        index = bisect_left(xy_events, uv_events[k], lo=prev_index)
-        # no events found
-        if index == prev_index:
-            if k == 0: continue
-            for q in range(Q):
-                Ri_temp[k, q] = e_intertimes_Q[k - 1, q] * Ri_temp[k - 1, q]
-        else:
-            diff_times = uv_events[k] - xy_events[prev_index:index]
-            if k == 0:
-                for q in range(Q):
-                    Ri_temp[k, q] = np.sum(np.exp(-betas[q] * diff_times))
-            else:
-                for q in range(Q):
-                    Ri_temp[k, q] = e_intertimes_Q[k - 1, q] * Ri_temp[k - 1, q] + np.sum(np.exp(-betas[q] * diff_times))
-            prev_index = index
-    return Ri_temp
-
-
-def cal_diff_sums_Q(events_dict, end_time, betas):
-    """
-    for each decay_q, calculate sum_ti {exp(- beta_q * (T - t_i))}
-
-    :param dict events_dict: keys are node pairs in the block pair & values are array of events between node pairs
-    :param float end_time: duration of the network
-    :param betas: (Q,) array of decays
-    :return: (Q,) array(float)
-    """
-    Q = len(betas) # number of decays
-    T_diff_sums = np.zeros(Q, )
-    if len(events_dict) == 0:
-        return T_diff_sums
-    events_array = list(events_dict.values())
-    T_diff = end_time - np.concatenate(events_array)
-    for q in range(Q):
-        T_diff_sums[q] = np.sum(1 - np.exp(-betas[q] * T_diff))
-    return T_diff_sums
 
 #%% 6-alpha diagonal block pair log-likelihood and fit functions
 def cal_R_6_alpha_dia_bp(events_dict, betas):
@@ -1581,6 +1492,94 @@ def fit_2_alpha_off_bp(ed, ed_r, end_time, n_b, m_ab, betas):
     return (mu, alpha_s, alpha_r, C, betas)
 
 
+
+# %% helper functions
+
+def plot_kernel(alpha, betas, C, time_range):
+    """plot decay kernel of one block pair"""
+    lambda_sum = []
+    for t in time_range:
+        lambda_sum.append( alpha*np.sum(betas * C * np.exp(-t*betas)))
+    plt.figure()
+    plt.plot(time_range, lambda_sum, color='red', label=f"betas1={betas}")
+    plt.xlabel("t(s)")
+    plt.ylabel("lambda(t)")
+    plt.yscale('log')
+    plt.title('sum of kernels C=[0.33, 0.33, 0.34] - different betas')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+
+def print_param_kernels(param):
+    """print parameters of one block pair"""
+    if len(param) == 9:
+        print(f"C = {param[7]}")
+        print(f"mu={param[0]:.7f}, alpha_s={param[1]:.4f}, alpha_r={param[2]:.4f}, alpha_tc={param[3]:.4f},"
+              f" alpha_gr={param[4]:.4f}, alpha_al={param[5]:.4f}, alpha_alr={param[6]:.4f}")
+    elif len(param) == 7:
+        print(f"C = {param[5]}")
+        print(f"mu={param[0]:.7f}, alpha_s={param[1]:.4f}, alpha_r={param[2]:.4f}, alpha_tc={param[3]:.4f},"
+              f" alpha_gr={param[4]:.4f}")
+    elif len(param) == 5:
+        print(f"C = {param[3]}")
+        print(f"mu={param[0]:.7f}, alpha_s={param[1]:.4f}, alpha_r={param[2]:.4f}")
+
+
+def cal_num_events(events_dict):
+    """calculate number of events in an event_dict"""
+    num_events = 0
+    for events_array in events_dict.values():
+        num_events += len(events_array)
+    return num_events
+
+
+def get_Ri_temp_Q(uv_events, e_intertimes_Q, xy_events, betas):
+    """block pair log-likelihood calculation helper function"""
+    Q = len(betas)
+    num_events_uv = len(uv_events)
+    Ri_temp = np.zeros((num_events_uv, Q))
+    prev_index = 0
+    for k in range(0, num_events_uv):
+        # return index below which t(x,y) < kth event of (u,v)
+        # if no events exists returns len(events(x,y))
+        index = bisect_left(xy_events, uv_events[k], lo=prev_index)
+        # no events found
+        if index == prev_index:
+            if k == 0: continue
+            for q in range(Q):
+                Ri_temp[k, q] = e_intertimes_Q[k - 1, q] * Ri_temp[k - 1, q]
+        else:
+            diff_times = uv_events[k] - xy_events[prev_index:index]
+            if k == 0:
+                for q in range(Q):
+                    Ri_temp[k, q] = np.sum(np.exp(-betas[q] * diff_times))
+            else:
+                for q in range(Q):
+                    Ri_temp[k, q] = e_intertimes_Q[k - 1, q] * Ri_temp[k - 1, q] + np.sum(np.exp(-betas[q] * diff_times))
+            prev_index = index
+    return Ri_temp
+
+
+def cal_diff_sums_Q(events_dict, end_time, betas):
+    """
+    for each decay_q, calculate sum_ti {exp(- beta_q * (T - t_i))}
+
+    :param dict events_dict: keys are node pairs in the block pair & values are array of events between node pairs
+    :param float end_time: duration of the network
+    :param betas: (Q,) array of decays
+    :return: (Q,) array(float)
+    """
+    Q = len(betas) # number of decays
+    T_diff_sums = np.zeros(Q, )
+    if len(events_dict) == 0:
+        return T_diff_sums
+    events_array = list(events_dict.values())
+    T_diff = end_time - np.concatenate(events_array)
+    for q in range(Q):
+        T_diff_sums[q] = np.sum(1 - np.exp(-betas[q] * T_diff))
+    return T_diff_sums
+
 #%% detailed log-likelihood functions
 """ only for checking code """
 def detailed_LL_sum_betas(params_array, C, betas, events_list, end_time, M, C_r=None):
@@ -1915,29 +1914,12 @@ def test_simulate_fit_kernel_sum_two_off_bp(n_alpha=6):
 if __name__ == "__main__":
     np.set_printoptions(suppress=True)
 
-    # chose between which #alpha model to test (2 or 4 or 6)
+    # Choose to simulate and fit 1 diagonal block pair OR 2 off-diagonal block pairs
+    # Also, choose # of excitation types
+
     # test_simulate_fit_kernel_sum_two_off_bp(n_alpha=2)
     test_simulate_fit_kernel_sum_dia_bp(n_alpha=6)
 
-    # two off-diagonal block pais simulation
-
-    # p_ab = (0.001, 0.4, 0.2, 0.03, 0.0001, 0.002, 0.0001, 5)
-    # p_ba = (0.002, 0.1, 0.5, 0.0003, 0.001, 0.0002, 0.001, 5)
-    # beta = p_ab[-1]
-    # n_a, n_b = 5, 4
-    #
-    # _, alpha_off, _ = bp_generate.get_array_param_n_r_br_gr_al_alr_off(p_ab, p_ba, n_a, n_b)
-    #
-    # w, v = np.linalg.eig(alpha_off)
-    # me = np.amax(np.abs(w))
-    # print('Max eigenvalue: %1.9f' % me)
-    # print(np.sum(alpha_off, axis=1))
-    # print(0.4 + 0.2 + 3*(0.03+ 0.0001) + 4*(0.002+ 0.0001))
-
-    # alpha_dia = get_6_alphas_matrix_dia_bp((0.4, 0.2, 0.03, 0.0001, 0.002, 0.0001), n_nodes=5)
-    # w_dia, _ = np.linalg.eig(alpha_dia)
-    # print('Max eigenvalue: %1.5f' % np.amax(np.abs(w_dia)))
-    # print(np.sum(alpha_dia, axis=1))
 
 
 

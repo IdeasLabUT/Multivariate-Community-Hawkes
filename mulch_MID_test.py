@@ -30,7 +30,6 @@ Other dataset-specific variables:
 """
 
 # TODO SUBMISSION: remove docker and all saving or read saved options
-# Note: changed MID format to csv file as an example for read_csv function
 # TODO - remove read graph function --> load MID function from graph is not used
 # TODO remove saved motif of dataset
 # TODO add analyze blocks and plot fit parameters
@@ -144,17 +143,17 @@ def get_list_counties_small_comp(adj, id_node_map):
 
 #%% Load MID incident data and fit multivariate block Hawkes model
 if __name__ == "__main__":
-    docker = False
+    docker = True
     if docker:
-        save_path = f"/data"  # when called from docker
+        save_path = f"/result"  # when called from docker
     else:
         save_path = f'/shared/Results/MultiBlockHawkesModel'
 
     PRINT_DETAILS = True   # print intermediate details of fitting and other test experiments
 
     """ Model Fitting """
-    FIT_MODEL = True  # either fit mulch or read saved fit
-    K_range = [4]  # number of blocks (K) range ex: range(1,11)
+    FIT_MODEL = False  # either fit mulch or read saved fit
+    K_range = range(1,11)  # number of blocks (K) range ex: range(1,11)
     n_alpha = 6 # number of excitations types choose between 2, 4, or 6
     save_fit = False  # save fitted model - specify path
     REF_ITER = 0  # maximum refinement interation - set to 0 for no refinement
@@ -176,8 +175,8 @@ if __name__ == "__main__":
     save_motif = False # save simulation motif counts - specify save path in code
 
     """ link prediction experiment"""
-    link_prediction_experiment = False
-    save_link = False  # save link prediction results specify path in code
+    link_prediction_experiment = True
+    save_link = True  # save link prediction results specify path in code
 
     # read MID csv file. Data stored as 3 columns (attacker country, attacked country, timestamp)
     print("Load MID dataset - timestampes scaled [0:1000]")
@@ -238,9 +237,11 @@ if __name__ == "__main__":
                   f"\ttest={ll_test_event_sp:.3f}")
             print(f"->Refinement log-likelihood:  \ttrain={ll_train_event_ref:.3f}\tall={ll_all_event_ref:.3f}"
                   f"\ttest={ll_test_event_ref:.3f}")
+
             print("\n->Analyzing refinement node membership: Counties in each block")
             fit_model.analyze_block(nodes_mem_train_ref, K, id_node_map_train)
-            print("plotti")
+            print("Plotting fit parameters")
+            fit_model.plot_mulch_param(fit_param_ref, n_alpha)
 
             if save_fit:
                 fit_dict = {}
@@ -271,7 +272,7 @@ if __name__ == "__main__":
 
         # read saved fit
         else:
-            full_fit_path = f"{save_path}/MID/6alpha_KernelSum_Ref_batch/2month1week2hour"
+            full_fit_path = f"{save_path}/MID/6alpha/2month2week1_2day"
             with open(f"{full_fit_path}/k_{K}.p", 'rb') as f:
                 fit_dict = pickle.load(f)
             # refinement parameters
@@ -323,7 +324,7 @@ if __name__ == "__main__":
             print(np.asarray(motif_test_dict["dataset_motif"], dtype=int))
             print("->average motifs count over ", n_motif_simulations, " simulations")
             print(np.asarray(motif_test_dict["sim_motif_avg"], dtype=int))
-            print(f'->MAPE = {motif_test_dict["mape"]:.2f}')
+            print(f'-> at K={K}: MAPE = {motif_test_dict["mape"]:.2f}')
 
             if save_motif:
                 full_motif_path = f"{save_path}/MotifCounts/{dataset}/test" # 2month1week2hour
@@ -353,10 +354,10 @@ if __name__ == "__main__":
                 auc[i] = accuracy_test.calculate_auc(y_mulch, pred_mulch, show_figure=False)
                 if PRINT_DETAILS:
                     print(f"at i={i} -> auc={auc[i]}")
-            print(f"->average AUC={np.average(auc):.5f}, std={auc.std():.3f}")
+            print(f"-> at K={K}: average AUC={np.average(auc):.5f}, std={auc.std():.3f}")
 
             if save_link:
-                full_link_path = f"{save_path}/AUC/{dataset}"
+                full_link_path = f"{save_path}/AUC/{dataset}/{n_alpha}alpha"
                 pickle_file_name = f"{full_link_path}/auc_k{K}.p"
                 auc_dict = {"t0": t0s, "auc": auc, "avg": np.average(auc), "std": auc.std(), "y__runs": y_runs,
                             "pred_runs": pred_runs, "ll_test": ll_test_event_ref}

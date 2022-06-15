@@ -1,13 +1,17 @@
 """ helper functions for generating networks from MULCH model
 
 Reference: MULCH simulation class MHP_Kernels.py is adapted from
-hawkes GitHub repository by Steven Morse https://github.com/stmorse/hawkes
+hawkes GitHub repository by Steven Morse https://github.com/stmorse/hawkes .
+See hawkes/MHP_Kernels for modification details.
 
 
-@author: Hadeel Soliman"""
+
+@author: Hadeel Soliman
+"""
+
 import random
 import numpy as np
-from hawkes.MHP_Kernels import MHP_Kernels_2
+from hawkes.MHP_Kernels import MHP_Kernels
 
 
 #%% simulation functions
@@ -92,7 +96,7 @@ def simulate_dia_bp(par, a_nodes, duration, return_list=False):
     n_alpha = len(par) - 3  # number of types of excitations
     # pass mu, alphas parameters
     mu_array, alpha_matrix = get_mu_array_alpha_matrix_dia_bp(par[0], par[1: n_alpha + 1], len(a_nodes))
-    P = MHP_Kernels_2(mu=mu_array, alpha=alpha_matrix, C=par[-2], betas=par[-1])
+    P = MHP_Kernels(mu=mu_array, alpha=alpha_matrix, C=par[-2], betas=par[-1])
     P.generate_seq(duration)
     # assume that timestamps list is ordered ascending with respect to u then v [(0,1), (0,2), .., (1,0), (1,2), ...]
     events_list = []
@@ -124,7 +128,7 @@ def simulate_off_bp(par_ab, par_ba, a_nodes, b_nodes, duration, return_list=Fals
     n_alpha = len(par_ba) - 3   # number of types of excitations
     mu_array, alpha_matrix = get_mu_array_alpha_matrix_off_bp(par_ab[0], par_ab[1: n_alpha+1], par_ba[0]
                                                               , par_ba[1: n_alpha+1], len(a_nodes), len(b_nodes))
-    P = MHP_Kernels_2(mu=mu_array, alpha=alpha_matrix, C=par_ab[-2], C_r=par_ba[-2], betas=par_ab[-1])
+    P = MHP_Kernels(mu=mu_array, alpha=alpha_matrix, C=par_ab[-2], C_r=par_ba[-2], betas=par_ab[-1])
     P.generate_seq(duration)
 
     # assume that timestamps list is ordered ascending with respect to u then v [(0,1), (0,2), .., (1,0), (1,2), ...]

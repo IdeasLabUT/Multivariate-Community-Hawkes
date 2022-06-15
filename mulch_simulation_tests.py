@@ -13,22 +13,13 @@ This file contains the following functions - more details in functions docstring
 @author: Hadeel Soliman
 """
 
-# TODO fix simulation parameters and make sure all prints are consistent and save files also
-# TODO figure out which parameters to delete
-# TODO remove save file option in functions
-# TODO do I want to plot results?
-
 import numpy as np
-import pickle
 import matplotlib.pyplot as plt
 from sklearn.metrics import adjusted_rand_score
 import utils_fit_model as fit_model
 from utils_generate_model import simulate_mulch
 from utils_fit_refine_mulch import fit_refinement_mulch
 from utils_fit_bp import cal_num_events
-
-
-
 
 
 
@@ -49,144 +40,45 @@ def arrage_fit_param(param, n_alpha, K, node_mem_true, node_mem_fit, betas):
     arranged_fit_param.append(betas)
     return arranged_fit_param
 
-def get_simulation_params(n_classes, level, n_alpha, sum):
-    # TODO dont delete
-    if(n_classes == 2 and level == 1000 and n_alpha==6 and sum == True):
-        theta_off = [0.0002, 0.3, 0.3, 0.004, 0.001, 0.003, 0.001]
-        theta_dia = [0.0002, 0.02, 0.01, 0.0002, 0.0001, 0.0002, 0.00005]
-        # dissortative mixing
-        mu_sim = np.ones((n_classes, n_classes)) * theta_off[0]
-        mu_sim[np.diag_indices_from(mu_sim)] = theta_dia[0]
+def get_simulation_params(n_classes, assortative):
+    if assortative: # assortative mixing - more events between diagonal block pairs
+        theta_dia = [0.008, 0.3, 0.3, 0.002, 0.0005, 0.001, 0.0005]
+        theta_off = [0.008, 0.1, 0.1, 0.001, 0.0001, 0.001, 0.0001]
+    else: # dissortative mixing - more events between off-diagonal block pairs
+        theta_off = [0.008, 0.3, 0.3, 0.002, 0.0005, 0.001, 0.0005]
+        theta_dia = [0.008, 0.1, 0.1, 0.001, 0.0001, 0.001, 0.0001]
 
-        alpha_s_sim = np.ones((n_classes, n_classes)) * theta_off[1]
-        alpha_s_sim[np.diag_indices_from(mu_sim)] = theta_dia[1]
+    mu_sim = np.ones((n_classes, n_classes)) * theta_off[0]
+    mu_sim[np.diag_indices_from(mu_sim)] = theta_dia[0]
 
-        alpha_r_sim = np.ones((n_classes, n_classes)) * theta_off[2]
-        alpha_r_sim[np.diag_indices_from(mu_sim)] = theta_dia[2]
+    alpha_s_sim = np.ones((n_classes, n_classes)) * theta_off[1]
+    alpha_s_sim[np.diag_indices_from(mu_sim)] = theta_dia[1]
 
-        alpha_tc_sim = np.ones((n_classes, n_classes)) * theta_off[3]
-        alpha_tc_sim[np.diag_indices_from(mu_sim)] = theta_dia[3]
+    alpha_r_sim = np.ones((n_classes, n_classes)) * theta_off[2]
+    alpha_r_sim[np.diag_indices_from(mu_sim)] = theta_dia[2]
 
-        alpha_gr_sim = np.ones((n_classes, n_classes)) * theta_off[4]
-        alpha_gr_sim[np.diag_indices_from(mu_sim)] = theta_dia[4]
+    alpha_tc_sim = np.ones((n_classes, n_classes)) * theta_off[3]
+    alpha_tc_sim[np.diag_indices_from(mu_sim)] = theta_dia[3]
 
-        alpha_al_sim = np.ones((n_classes, n_classes)) * theta_off[5]
-        alpha_al_sim[np.diag_indices_from(mu_sim)] = theta_dia[5]
+    alpha_gr_sim = np.ones((n_classes, n_classes)) * theta_off[4]
+    alpha_gr_sim[np.diag_indices_from(mu_sim)] = theta_dia[4]
 
-        alpha_alr_sim = np.ones((n_classes, n_classes)) * theta_off[6]
-        alpha_alr_sim[np.diag_indices_from(mu_sim)] = theta_dia[6]
-        C_sim = np.array([[[0.33, 0.33, 0.34]] * n_classes for _ in range(n_classes)])
-        betas_recip = np.array([7 * 2, 1, 1 / 12])  # [2week, 1day, 2hour]
-        betas = np.reciprocal(betas_recip)
-        param = (mu_sim, alpha_s_sim, alpha_r_sim, alpha_tc_sim, alpha_gr_sim, alpha_al_sim, alpha_alr_sim, C_sim, betas)
-    # TODO dont delete
-    elif (n_classes == 4 and level == 1000 and n_alpha==6 and sum == True):
-        theta_dia = [0.0002, 0.3, 0.3, 0.004, 0.001, 0.003, 0.001]
-        theta_off = [0.0002, 0.02, 0.01, 0.0002, 0.0001, 0.0002, 0.00005]
+    alpha_al_sim = np.ones((n_classes, n_classes)) * theta_off[5]
+    alpha_al_sim[np.diag_indices_from(mu_sim)] = theta_dia[5]
 
-        C_sim = np.array([[[0.33, 0.33, 0.34]] * n_classes for _ in range(n_classes)])
-        betas_recip = np.array([7 * 2, 1, 1 / 12])  # [2week, 1day, 2hour]
-        # assortative mixing
-        mu_sim = np.ones((n_classes, n_classes)) * theta_off[0]
-        mu_sim[np.diag_indices_from(mu_sim)] = theta_dia[0]
+    alpha_alr_sim = np.ones((n_classes, n_classes)) * theta_off[6]
+    alpha_alr_sim[np.diag_indices_from(mu_sim)] = theta_dia[6]
 
-        alpha_s_sim = np.ones((n_classes, n_classes)) * theta_off[1]
-        alpha_s_sim[np.diag_indices_from(mu_sim)] = theta_dia[1]
+    C_sim = np.array([[[0.33, 0.33, 0.34]] * n_classes for _ in range(n_classes)])
+    betas_recip = np.array([7 * 2, 1, 1 / 12])  # [2week, 1day, 2hour]
+    betas = np.reciprocal(betas_recip)
 
-        alpha_r_sim = np.ones((n_classes, n_classes)) * theta_off[2]
-        alpha_r_sim[np.diag_indices_from(mu_sim)] = theta_dia[2]
+    param = (mu_sim, alpha_s_sim, alpha_r_sim, alpha_tc_sim, alpha_gr_sim, alpha_al_sim, alpha_alr_sim, C_sim, betas)
 
-        alpha_tc_sim = np.ones((n_classes, n_classes)) * theta_off[3]
-        alpha_tc_sim[np.diag_indices_from(mu_sim)] = theta_dia[3]
-
-        alpha_gr_sim = np.ones((n_classes, n_classes)) * theta_off[4]
-        alpha_gr_sim[np.diag_indices_from(mu_sim)] = theta_dia[4]
-
-        alpha_al_sim = np.ones((n_classes, n_classes)) * theta_off[5]
-        alpha_al_sim[np.diag_indices_from(mu_sim)] = theta_dia[5]
-
-        alpha_alr_sim = np.ones((n_classes, n_classes)) * theta_off[6]
-        alpha_alr_sim[np.diag_indices_from(mu_sim)] = theta_dia[6]
-        betas = np.reciprocal(betas_recip)
-        param = (mu_sim, alpha_s_sim, alpha_r_sim, alpha_tc_sim, alpha_gr_sim, alpha_al_sim, alpha_alr_sim, C_sim, betas)
-    # TODO dont delete
-    elif (n_classes == 4 and level == 100 and n_alpha==6 and sum == True):
-        theta_dia = [0.0002, 0.3, 0.3, 0.004, 0.001, 0.003, 0.001]
-        theta_off = [0.0002, 0.02, 0.01, 0.0002, 0.0001, 0.0002, 0.00005]
-        # assortative mixing
-        mu_sim = np.ones((n_classes, n_classes)) * theta_off[0]
-        mu_sim[np.diag_indices_from(mu_sim)] = theta_dia[0]
-
-        alpha_s_sim = np.ones((n_classes, n_classes)) * theta_off[1]
-        alpha_s_sim[np.diag_indices_from(mu_sim)] = theta_dia[1]
-
-        alpha_r_sim = np.ones((n_classes, n_classes)) * theta_off[2]
-        alpha_r_sim[np.diag_indices_from(mu_sim)] = theta_dia[2]
-
-        alpha_tc_sim = np.ones((n_classes, n_classes)) * theta_off[3]
-        alpha_tc_sim[np.diag_indices_from(mu_sim)] = theta_dia[3]
-
-        alpha_gr_sim = np.ones((n_classes, n_classes)) * theta_off[4]
-        alpha_gr_sim[np.diag_indices_from(mu_sim)] = theta_dia[4]
-
-        alpha_al_sim = np.ones((n_classes, n_classes)) * theta_off[5]
-        alpha_al_sim[np.diag_indices_from(mu_sim)] = theta_dia[5]
-
-        alpha_alr_sim = np.ones((n_classes, n_classes)) * theta_off[6]
-        alpha_alr_sim[np.diag_indices_from(mu_sim)] = theta_dia[6]
-        C_sim = np.array([[[0.33, 0.33, 0.34]] * n_classes for _ in range(n_classes)])
-        betas_recip = np.array([7 * 2, 1, 1 / 12])  # [2week, 1day, 2hour]
-        betas = np.reciprocal(betas_recip)
-        param = (
-        mu_sim, alpha_s_sim, alpha_r_sim, alpha_tc_sim, alpha_gr_sim, alpha_al_sim, alpha_alr_sim, C_sim, betas)
-    elif (n_classes == 3 and level == 1 and n_alpha==6 and sum == False):
-        # simulation parameters
-        mu_sim = np.array([[0.0005, 0.0005, 0.0004],
-                           [0.0003, 0.0008, 0.0003],
-                           [0.0003, 0.0004, 0.0007]])
-        alpha_s_sim = np.array([[0.01, 0.03, 0.02],
-                                [0.0, 0.3, 0.01],
-                                [0.0, 0.03, 0.1]])
-        alpha_r_sim = np.array([[0.1, 0.05, 0.07],
-                                [0.01, 0.001, 0.01],
-                                [0.001, 0.0, 0.05]])
-        alpha_tc_sim = np.array([[0.002, 0.0005, 0.0001], [0.0, 0.005, 0.0006], [0.0001, 0.0009, 0.03]])
-        alpha_gr_sim = np.array([[0.001, 0.0, 0.0001], [0.0, 0.008, 0.0001], [0.0, 0.0002, 0.0]])
-        alpha_al_sim = np.array([[0.001, 0.0001, 0.0], [0.0, 0.002, 0.0], [0.0001, 0.0007, 0.001]])
-        alpha_alr_sim = np.array([[0.003, 0.0001, 0.0001], [0.0, 0.001, 0.0006], [0.0001, 0.0, 0.003]])
-        beta = 1
-        param = (mu_sim, alpha_s_sim, alpha_r_sim, alpha_tc_sim, alpha_gr_sim, alpha_al_sim, alpha_alr_sim, beta)
-    elif (n_classes == 4 and level == 1 and n_alpha==6 and sum == True):
-        # simulation parameters
-        mu_sim = np.array([[0.0005, 0.0001, 0.0001, 0.0001],
-                           [0.0001, 0.0004, 0.0001, 0.00001],
-                           [0.0001, 0.0001, 0.0003, 0.00005],
-                           [0.00001, 0.0001, 0.0001, 0.0002]])
-        alpha_s_sim = np.array([[0.4, 0.09, 0.03, 0.0],[0.01, 0.25, 0.01, 0.009],
-                                [0.03, 0.03, 0.1, 0.0],[0.0, 0.0, 0.02, 0.01]])
-        alpha_r_sim = np.array([[0.1, 0.05, 0.02, 0.01],[0.01, 0.25, 0.01, 0.01],
-                                [0.03, 0.03, 0.4, 0.0],[0.0, 0.0, 0.01, 0.1]])
-        alpha_tc_sim = np.array([[0.002, 0.0001, 0.001, 0.0001],
-                                 [0.0001, 0.0002, 0.0007, 0.0003],
-                                 [0.0001, 0.0002, 0.003, 0.001],
-                                 [0.0, 0.0, 0.0, 0.001]])
-        alpha_gr_sim = np.array([[0.001, 0.0001, 0.0002, 0.0001],
-                                 [0.0001, 0.0, 0.0002, 0.0001],
-                                 [0.0001, 0.0002, 0.001, 0.0001],
-                                 [0.0001, 0.0001, 0.0001, 0.001]])
-        alpha_al_sim = np.array([[0.0005, 0.0001, 0.0001, 0.0001],
-                                 [0.0001, 0.0005, 0.0006, 0.0001],
-                                  [0.009, 0.0001, 0.0005, 0.0001],
-                                 [0.001, 0.0001, 0.0, 0.001]])
-        alpha_alr_sim = np.array([[0.0001, 0.0001, 0.0001, 0.0001], [0.0001, 0.0, 0.0006, 0.0001],
-                                  [0.001, 0.0001, 0.0, 0.0001], [0.0, 0.0, 0.0, 0.0001]])
-        C_sim = np.array([[[0.33, 0.33, 0.34]] * n_classes for _ in range(n_classes)])
-        betas = np.array([0.02, 0.6, 20])
-        param = (mu_sim, alpha_s_sim, alpha_r_sim, alpha_tc_sim, alpha_gr_sim, alpha_al_sim, alpha_alr_sim, C_sim, betas)
     return param
 
 #%% simulation accuracy tests
-def spectral_clustering_accuracy(n_run = 10, verbose=False, file_name=None):
+def spectral_clustering_accuracy(n_run = 10, verbose=False, plot=False):
     """
     evaluate spectral clustering accuracy as both n, T increase
 
@@ -199,14 +91,16 @@ def spectral_clustering_accuracy(n_run = 10, verbose=False, file_name=None):
 
     :param n_run: # number of simulation per (n, T) values
     :param verbose: print intermediate results details
-    :param file_name: DELETE
+    :param plot: plot results
     :return:
     """
     K, n_alpha = 4, 6
     percent = [1 / K] * K  # nodes percentage membership
-    sim_param = get_simulation_params(K, level=1000, n_alpha=n_alpha, sum=True)
+    sim_param = get_simulation_params(K, assortative=True)
     N_range = np.arange(40, 101, 15)
-    T_range = np.arange(600, 1401, 200)
+    T_range = np.arange(60, 241, 45)
+
+
 
     RI = np.zeros((len(N_range), len(T_range)))  # hold RI scores while varying n_nodes & duration
     n_events_matrix = np.zeros((len(N_range), len(T_range)))  # hold simulated n_events while varying n_nodes & duration
@@ -221,7 +115,8 @@ def spectral_clustering_accuracy(n_run = 10, verbose=False, file_name=None):
                 n_events = cal_num_events(events_dict)
                 agg_adj = fit_model.event_dict_to_aggregated_adjacency(N, events_dict)
                 # if it == 0 and verbose:
-                #     mulch_fit.plot_adj(agg_adj, node_mem_true, K, f"N={N}, T={T}")
+                #     fit_model.plot_adj(agg_adj, node_mem_true, K, f"N={N}, T={T}")
+                #     print("\t\t#events=", n_events)
                 node_mem_spectral = fit_model.spectral_cluster1(agg_adj, K, n_kmeans_init=500, normalize_z=True,
                                                                 multiply_s=True)
                 rand_i = adjusted_rand_score(node_mem_true, node_mem_spectral)
@@ -236,6 +131,7 @@ def spectral_clustering_accuracy(n_run = 10, verbose=False, file_name=None):
                 print("\t--> Iteration average: ", RI_avg)
             RI[N_idx, T_idx] = RI_avg
             n_events_matrix[N_idx, T_idx] = n_events_avg
+
     results_dict = {}
     results_dict["sim_param"] = sim_param
     results_dict["RI"] = RI
@@ -243,13 +139,24 @@ def spectral_clustering_accuracy(n_run = 10, verbose=False, file_name=None):
     results_dict["N_range"] = N_range
     results_dict["T_range"] = T_range
     results_dict["n_run"] = n_run
-    if file_name is not None:
-        with open(f"{file_name}.p", 'wb') as fil:
-            pickle.dump(results_dict, fil)
+
+    if plot:
+        fig, ax = plt.subplots(figsize=(5, 4))
+        c = ax.pcolor(results_dict['RI'], cmap='Greens')
+        ax.set_xticks(np.arange(5) + 0.5)
+        ax.set_xticklabels(results_dict['N_range'])
+        ax.set_yticks(np.arange(5) + 0.5)
+        ax.set_yticklabels(results_dict['T_range']/30)
+        ax.set_xlabel('number of nodes n')
+        ax.set_ylabel('duration T (month)')
+        fig.colorbar(c, ax=ax)
+        ax.set_title('Spectral Clustering - Adjusted Rand Index')
+
+
     return results_dict
 
 
-def parameters_estimation_MSE(fixed_n=True, n_run = 10, verbose=False, file_name=None):
+def parameters_estimation_MSE(fixed_n=True, n_run=10, verbose=False, plot=False):
     """
     test accuracy of model's MLE
 
@@ -267,20 +174,20 @@ def parameters_estimation_MSE(fixed_n=True, n_run = 10, verbose=False, file_name
         Otherwise, fix T, and vary n.
     :param n_run: number of simulations per a pair of (n, T)
     :param verbose: print all intermediate results
-    :param file_name: DELETE
+    :param plot: plot results
     :return: results dictionary
     """
     K = 2
     n_alpha = 6
     percent = [1 / K] * K  # nodes percentage membership
-    sim_param = get_simulation_params(K, level=1000, n_alpha=n_alpha, sum=True)
+    sim_param = get_simulation_params(K, assortative=False)
     betas = sim_param[-1]
     if fixed_n:
         n_range = np.array([70])
-        T_range = np.arange(600, 1401, 200)
+        T_range = np.arange(60, 241, 45)
     else:
         n_range = np.arange(40, 101, 15)
-        T_range = np.array([1000])
+        T_range = np.array([150])
 
     # hold parameter's average MSE for range of (n) and (T)
     mMSE_mu = np.zeros((len(n_range), len(T_range)))
@@ -319,8 +226,6 @@ def parameters_estimation_MSE(fixed_n=True, n_run = 10, verbose=False, file_name
                 events_dict, node_mem_true = simulate_mulch(sim_param, n, K, percent, T)
                 n_events = cal_num_events(events_dict)
                 agg_adj = fit_model.event_dict_to_aggregated_adjacency(n, events_dict)
-                # if it == 0:
-                #     mulch_fit.plot_adj(agg_adj, node_mem_true, K, f"N={N}, T={T}")
                 # run spectral clustering
                 node_mem_spectral = fit_model.spectral_cluster1(agg_adj, K, n_kmeans_init=500, normalize_z=True,
                                                                 multiply_s=True)
@@ -337,9 +242,7 @@ def parameters_estimation_MSE(fixed_n=True, n_run = 10, verbose=False, file_name
                 MSE_alpha_al[it] = np.sum(np.square(sim_param[5] - fit_param[5]))
                 MSE_alpha_alr[it] = np.sum(np.square(sim_param[6] - fit_param[6]))
                 MSE_C[it] = np.sum(np.square(sim_param[7][:, :, :-1] - fit_param[7][:, :, :-1]))
-                if verbose:
-                    print(f"\t\tSample MSE: mu={MSE_mu[it]:.4f}, alpha_r={MSE_alpha_r[it]:.4f}, "
-                          f"alpha_tc{MSE_alpha_tc[it]:.4f}, C={MSE_C[it]:.4f}")
+
             mMSE_mu[N_idx, T_idx] = np.mean(MSE_mu)
             mMSE_alpha_s[N_idx, T_idx] = np.mean(MSE_alpha_s)
             mMSE_alpha_r[N_idx, T_idx] = np.mean(MSE_alpha_r)
@@ -348,7 +251,8 @@ def parameters_estimation_MSE(fixed_n=True, n_run = 10, verbose=False, file_name
             mMSE_alpha_al[N_idx, T_idx] = np.mean(MSE_alpha_al)
             mMSE_alpha_alr[N_idx, T_idx] = np.mean(MSE_alpha_alr)
             mMSE_C[N_idx, T_idx] = np.mean(MSE_C)
-            sMSE_mu[N_idx, T_idx] = np.mean(MSE_mu)
+
+            sMSE_mu[N_idx, T_idx] = np.std(MSE_mu)
             sMSE_alpha_s[N_idx, T_idx] = np.std(MSE_alpha_s)
             sMSE_alpha_r[N_idx, T_idx] = np.std(MSE_alpha_r)
             sMSE_alpha_tc[N_idx, T_idx] = np.std(MSE_alpha_tc)
@@ -356,9 +260,7 @@ def parameters_estimation_MSE(fixed_n=True, n_run = 10, verbose=False, file_name
             sMSE_alpha_al[N_idx, T_idx] = np.std(MSE_alpha_al)
             sMSE_alpha_alr[N_idx, T_idx] = np.std(MSE_alpha_alr)
             sMSE_C[N_idx, T_idx] = np.std(MSE_C)
-            if verbose:
-                print(f"Average MSE: mu={mMSE_mu[N_idx, T_idx]:.4f}, alpha_r={mMSE_alpha_r[N_idx, T_idx]:.4f},"
-                  f"alpha_tc={mMSE_alpha_tc[N_idx, T_idx]:.4f}, C={mMSE_C[N_idx, T_idx]:.4f}")
+
     results_dict = {}
     results_dict["sim_param"] = sim_param
     results_dict["MSE_mean"] = (mMSE_mu, mMSE_alpha_s, mMSE_alpha_r, mMSE_alpha_tc, mMSE_alpha_gr, mMSE_alpha_al
@@ -368,17 +270,37 @@ def parameters_estimation_MSE(fixed_n=True, n_run = 10, verbose=False, file_name
     results_dict["N_range"] = n_range
     results_dict["T_range"] = T_range
     results_dict["n_run"] = n_run
-    if file_name is not None:
+
+    if plot:
+        labels = ['baseline', 'self', 'reciprocal', 'turn_conti', 'generalized_recip',
+                  'allied', 'allied_recip', 'kernel_scaling']
         if fixed_n:
-            file_name= f"{file_name}_fixed_n.p"
+            for i in range(len(labels)):
+                fig, ax = plt.subplots(figsize=(5, 4))
+                ax.bar(results_dict['T_range']/30, results_dict['MSE_mean'][i].ravel(),
+                       yerr=results_dict['MSE_std'][i].ravel() / np.sqrt(results_dict['n_run']))
+                ax.set_xticks(results_dict['T_range']/30)
+                ax.set_xticklabels(results_dict['T_range']/30)
+                ax.set_xlabel('duration T (month)')
+                ax.set_ylabel('mean-squared error')
+                ax.set_title(f'{labels[i]} at Fixed n={results_dict["N_range"][0]}')
+
         else:
-            file_name= f"{file_name}_fixed_t.p"
-        with open(file_name, 'wb') as fil:
-            pickle.dump(results_dict, fil)
+            for i in range(len(labels)):
+                fig, ax = plt.subplots(figsize=(5, 4))
+                ax.bar(results_dict['N_range'], results_dict['MSE_mean'][i].ravel(),
+                       yerr=results_dict['MSE_std'][i].ravel() / np.sqrt(results_dict['n_run']), width=5,
+                       color='grey')
+                ax.set_xticks(results_dict['N_range'])
+                ax.set_xticklabels(results_dict['N_range'])
+                ax.set_xlabel('number of nodes n', fontsize=14)
+                ax.set_ylabel('mean-squared error', fontsize=14)
+                ax.set_title(f'{labels[i]} at fixed T={results_dict["T_range"][0]}')
+
     return results_dict
 
 
-def refinement_accuracy(fixed_n=True, max_refine_iter = 10, n_run = 10, verbose=False, file_name=None):
+def refinement_accuracy(fixed_n=True, max_refine_iter = 7, n_run = 10, verbose=False, plot=False):
     """ Nodes membership accuracy after running log-likelihood alg
 
     simulate networks from MULCH at K=4 & #excitations=6, then compute adjusted rand
@@ -387,35 +309,40 @@ def refinement_accuracy(fixed_n=True, max_refine_iter = 10, n_run = 10, verbose=
     refinement algorithm.
 
     Two simulation test can be done:
-        - simulated at (#nodes) n = 80 and vary T.
-        - simulate at (network's duration) T = 2000 and vary n
+        - simulated at (#nodes) n = 70 and vary T.
+        - simulate at (network's duration) T = 105 days and vary n
 
     :param fixed_n: if True, set n fixed, simulate networks at varying T.
         Otherwise, fix T, and vary n.
     :param max_refine_iter: Maximum number of refinement iterations
     :param n_run: number of simulations per a pair of (n, T)
     :param verbose: print all intermediate results
-    :param file_name: DELETE
+    :param plot: plot results
     :return: result dictionary
     """
     K, n_alpha = 4, 6
     p = [1 / K] * K  # balanced node membership
     if fixed_n:
         N_range = np.array([70])
-        T_range = np.arange(600, 1401, 200)
+        T_range = np.arange(60, 241, 45)
     else:
         N_range = np.arange(40, 101, 15)
-        T_range = np.array([1000])
+        T_range = np.array([105])
 
-    RI_sp = np.zeros((len(N_range), len(T_range)))  # hold RI scores while varying n_nodes & duration
-    RI_ref = np.zeros((len(N_range), len(T_range)))  # hold RI scores while varying n_nodes & duration
+    # hold average RI scores while varying n_nodes & duration
+    RI_sp = np.zeros((len(N_range), len(T_range)))
+    RI_ref = np.zeros((len(N_range), len(T_range)))
+    # holds RU scores over simulations
+    RI_sp_runs = np.zeros((len(N_range), len(T_range), n_run))
+    RI_ref_runs = np.zeros((len(N_range), len(T_range), n_run))
+
     # 1) simulate from 6-alpha sum of kernels model
-    sim_param = get_simulation_params(K, 100, n_alpha, sum=True)
+    sim_param = get_simulation_params(K, assortative=True)
     betas = sim_param[-1]
     for T_idx, T in enumerate(T_range):
         for N_idx, N in enumerate(N_range):
             if verbose:
-                print(f"\n At K={K}, N={N}:")
+                print(f"\n At T={T}, N={N}:")
             ri_sp_avg = 0
             ri_ref_avg = 0
             for it in range(n_run):
@@ -426,9 +353,11 @@ def refinement_accuracy(fixed_n=True, max_refine_iter = 10, n_run = 10, verbose=
                 # agg_adj = mulch_fit.event_dict_to_aggregated_adjacency(N, events_dict)
                 # MBHP.plot_adj(agg_adj, nodes_mem_true, K, "True membership")
                 sp, ref, m = fit_refinement_mulch(events_dict, N, T, K, betas, n_alpha, max_refine_iter,
-                                                  nodes_mem_true=nodes_mem_true, verbose=False)
+                                                  nodes_mem_true=nodes_mem_true, verbose=verbose)
                 ri_sp = adjusted_rand_score(nodes_mem_true, sp[0])
                 ri_ref = adjusted_rand_score(nodes_mem_true, ref[0])
+                RI_sp_runs[N_idx, T_idx, it] = ri_sp
+                RI_ref_runs[N_idx, T_idx, it] = ri_ref
                 if verbose:
                     print(f"\t\tadjusted rand index: spectral={ri_sp:.3f}, refinement={ri_ref:.3f}")
                 ri_sp_avg += ri_sp
@@ -437,7 +366,7 @@ def refinement_accuracy(fixed_n=True, max_refine_iter = 10, n_run = 10, verbose=
             ri_ref_avg = ri_ref_avg / n_run
             ri_sp_avg = ri_sp_avg / n_run
             if verbose:
-                print(f"-->Iteration average: sp={ri_sp_avg}, ref{ri_ref_avg}")
+                print(f"-->Iteration average: sp={ri_sp_avg}, ref={ri_ref_avg}")
             RI_sp[N_idx, T_idx] = ri_sp_avg
             RI_ref[N_idx, T_idx] = ri_ref_avg
 
@@ -445,17 +374,45 @@ def refinement_accuracy(fixed_n=True, max_refine_iter = 10, n_run = 10, verbose=
     results_dict["sim_param"] = sim_param
     results_dict["RI_sp"] = RI_sp
     results_dict["RI_ref"] = RI_ref
+    results_dict["RI_sp_runs"] = RI_sp_runs
+    results_dict["RI_ref_runs"] = RI_ref_runs
     results_dict["T_range"] = T_range
     results_dict["N_range"] = N_range
     results_dict["MAX_ITER"] = max_refine_iter
     results_dict["runs"] = n_run
-    if file_name is not None:
+
+    if plot:
         if fixed_n:
-            file_name = f"{file_name}_fixed_n.p"
+            fig, ax = plt.subplots(figsize=(5, 4))
+            ax.errorbar(results_dict['T_range'], results_dict['RI_sp'].ravel(), fmt='k.-', markersize=7
+                        , yerr=np.std(results_dict['RI_sp_runs'], axis=2).ravel() / np.sqrt(results_dict['runs'])
+                        , elinewidth=1, label='spectral clustering')
+            ax.errorbar(results_dict['T_range'], results_dict['RI_ref'].ravel(), fmt='g.-', markersize=7
+                        , yerr=np.std(results_dict['RI_ref_runs'], axis=2).ravel() / np.sqrt(results_dict['runs'])
+                        , elinewidth=1, label='refinement')
+            plt.legend()
+            plt.ylim([0, 1.05])
+            ax.set_xlabel('duration T (month)')
+            ax.set_ylabel('adjusted rand index')
+            ax.set_xticks(results_dict['T_range'])
+            ax.set_xticklabels(results_dict['T_range']/30)
+            ax.set_title(f'fixed N={results_dict["N_range"][0]}')
         else:
-            file_name = f"{file_name}_fixed_t.p"
-        with open(file_name, 'wb') as fil:
-            pickle.dump(results_dict, fil)
+            fig, ax = plt.subplots(figsize=(5, 4))
+            ax.errorbar(results_dict['N_range'], results_dict['RI_sp'].ravel(), fmt='k.-', markersize=7
+                        , yerr=np.std(results_dict['RI_sp_runs'], axis=2).ravel() / np.sqrt(results_dict['runs'])
+                        , elinewidth=1, label='spectral clustering')
+            ax.errorbar(results_dict['N_range'], results_dict['RI_ref'].ravel(), fmt='g.-', markersize=7
+                        , yerr=np.std(results_dict['RI_ref_runs'], axis=2).ravel() / np.sqrt(results_dict['runs'])
+                        , elinewidth=1, label='refinement')
+            plt.legend()
+            plt.ylim([0, 1.05])
+            ax.set_xlabel('number of nodes n', fontsize=11)
+            ax.set_ylabel('adjusted rand index', fontsize=11)
+            ax.set_xticks(results_dict['N_range'])
+            ax.set_xticklabels(results_dict['N_range'])
+            ax.set_title(f'fixed T={results_dict["T_range"][0]}')
+
     return results_dict
 
 #%% Main
@@ -463,6 +420,6 @@ def refinement_accuracy(fixed_n=True, max_refine_iter = 10, n_run = 10, verbose=
 if __name__ == "__main__":
     np.set_printoptions(suppress=True)
 
-    # res = spectral_clustering_accuracy(n_run=10, verbose=True, save_file=None)
-    # res = parameters_estimation_MSE(fixed_n=True, n_run=10, verbose=True, save_file=None)
-    res = refinement_accuracy(fixed_n=True, max_refine_iter=10, n_run=1, verbose=True, file_name=None)
+    # res = spectral_clustering_accuracy(verbose=True, plot=True)
+    # res = parameters_estimation_MSE(fixed_n=False, verbose=False, plot=True)
+    res = refinement_accuracy(fixed_n=False, verbose=True, plot=True)

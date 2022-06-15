@@ -22,7 +22,7 @@ sys.path.append("./CHIP-Network-Model")
 import model_fitting_utils as chip_utils
 import bhm_parameter_estimation as bhm_utils
 from generative_model_utils import event_dict_to_block_pair_events
-from dataset_utils import load_enron_train_test, load_reality_mining_test_train
+from dataset_utils import load_enron_train_test, load_reality_mining_test_train, load_facebook_wall
 from chip_generative_model import community_generative_model
 from bhm_generative_model import block_generative_model
 
@@ -35,6 +35,8 @@ def simulate_count_motif_experiment_chip_bhm(chip, dataset_motif, param, nodes_m
     _, block_count = np.unique(nodes_mem, return_counts=True)
     block_prob = block_count / sum(block_count)
     sim_motif_avg = np.zeros((6, 6))
+    sim_motif_all = np.zeros((n_sim, 6, 6))
+    sim_mape_all = np.zeros(n_sim)
     sim_n_events_avg, sim_trans_avg, sim_recip_avg = 0, 0, 0
     for run in range(n_sim):
         # simulate using fitted parameters
@@ -46,10 +48,16 @@ def simulate_count_motif_experiment_chip_bhm(chip, dataset_motif, param, nodes_m
         # simulate from BHM
         else:
             _, events_dict_sim = block_generative_model(n_nodes, block_prob, mu, alpha, beta, T_sim)
-        recip_sim, trans_sim, sim_motif_month, n_evens_sim = cal_recip_trans_motif(events_dict_sim, n_nodes, motif_delta)
-        sim_motif_avg += sim_motif_month
+
+        recip_sim, trans_sim, sim_motif, n_evens_sim = \
+            cal_recip_trans_motif(events_dict_sim, n_nodes, motif_delta, verbose=verbose)
+        sim_mape_all[run] = 100 / 36 * np.sum(np.abs(sim_motif - (dataset_motif + 1))
+                                              / (dataset_motif + 1))
+        sim_motif_avg += sim_motif
+        sim_motif_all[run, :, :] = sim_motif
         if verbose:
-            print(f"n_events={n_evens_sim}, recip={recip_sim:.4f}, trans={trans_sim:.4f}")
+            print(f"n_events={n_evens_sim}, recip={recip_sim:.4f}, trans={trans_sim:.4f}"
+                  f", MAPE={sim_mape_all[run]:.1f}")
         sim_recip_avg += recip_sim
         sim_trans_avg += trans_sim
         sim_n_events_avg += n_evens_sim
@@ -58,6 +66,7 @@ def simulate_count_motif_experiment_chip_bhm(chip, dataset_motif, param, nodes_m
     sim_recip_avg /= n_sim
     sim_trans_avg /= n_sim
     sim_n_events_avg /= n_sim
+    sim_motif_median = np.median(sim_motif_all, axis=0)
 
     # calculate MAPE - NOTE: just added 1 to avoid division by 0
     mape = 100 / 36 * np.sum(np.abs(sim_motif_avg - (dataset_motif + 1)) / (dataset_motif + 1))
@@ -74,10 +83,14 @@ def simulate_count_motif_experiment_chip_bhm(chip, dataset_motif, param, nodes_m
     motif_dict["n_simulations"] = n_sim
     motif_dict["parameters"] = param
     motif_dict["motif_delta"] = motif_delta
+    motif_dict["dataset_motif"] = dataset_motif
     motif_dict["sim_motif_avg"] = sim_motif_avg
+    motif_dict["sim_motif_all"] = sim_motif_all
+    motif_dict["sim_motif_median"] = sim_motif_median
     motif_dict["sim_recip_avg"] = sim_recip_avg
     motif_dict["sim_trans_avg"] = sim_trans_avg
     motif_dict["sim_n_events_avg"] = sim_n_events_avg
+    motif_dict["mape_all"] = sim_mape_all
     motif_dict["mape"] = mape
     return motif_dict
 
@@ -164,12 +177,16 @@ if __name__ == "__main__":
 
     docker = False
     if docker:
-        save_path = f"/data"  # when called from docker
+        save_path = f"/result"  # when called from docker
     else:
         save_path = f'/shared/Results/MultiBlockHawkesModel'
 
-    CHIP = True     # if chip is false then experiments for BHM
-    K_range = range(1, 2)  # range(1, 11)
+    PRINT_DETAILS = False
+    CHIP = True   # if chip is false then experiments for BHM
+    """[1,6,11,16,21,26,31,36,41,46] +range(47, 52) <-Reality
+       range(1,15) [20, 30, 40] range(45, 106, 10) <-MID
+       [1,2,6,11,16] [12,13,14,15] + list(range(17,40, 2))<- Enron"""
+    K_range = range(1, 11) # range(1, 11) -
 
     """ model fitting """
     FIT_MODEL = True    # false means read a saved fit
@@ -178,16 +195,16 @@ if __name__ == "__main__":
 
     """ motif simulation """
     motif_experiment = False
-    n_motif_simulations = 2
-    save_motif = False  # specify path in code
+    n_motif_simulations = 30
+    save_motif = True  # specify path in code
 
     """ link prediction """
-    link_prediction_experiment = True
-    save_link = False  # specify path in code
+    link_prediction_experiment = False
+    save_link = True  # specify path in code
 
 
     # # # load Dataset
-    dataset = "RealityMining"  # "RealityMining" , "Enron", "FacebookFiltered" ,or "MID"
+    dataset = "Enron"  # "RealityMining" , "Enron", "FacebookFiltered" ,or "MID"
 
     if dataset =="Enron":
         train_tuple, test_tuple, all_tuple, nodes_not_in_train =\
@@ -212,17 +229,27 @@ if __name__ == "__main__":
     elif dataset == "MID":
         file_path_csv = os.path.join(os.getcwd(), "storage", "datasets", "MID", "MID.csv")
         train_tup, all_tup, nodes_not_in_train = fit_model.read_csv_split_train(file_path_csv, delimiter=',')
-        events_dict_train, T_train, n_nodes_train, n_events_train, id_node_map_train = train_tup
-        events_dict_all, T_all, n_nodes_all, n_events_all, id_node_map_all = all_tup
+        events_dict_train, n_nodes_train, T_train, n_events_train, id_node_map_train = train_tup
+        events_dict_all, n_nodes_all, T_all, n_events_all, id_node_map_all = all_tup
         motif_delta = 4
         motif_delta_txt = 'month'
         link_pred_delta = 7.15
+    elif dataset == "Facebook":
+        train_tuple, _, all_tuple, nodes_not_in_train = load_facebook_wall(timestamp_max=1000,
+                                                                                    largest_connected_component_only=True,
+                                                                                    train_percentage=0.8)
+        events_dict_train, n_nodes_train, T_train = train_tuple
+        events_dict_all, n_nodes_all, T_all = all_tuple
+        n_events_train = cal_num_events(events_dict_train)
+        n_events_all = cal_num_events(events_dict_all)
+        motif_delta = 30 * (1000 / 1591)  # 2 weeks
+        link_pred_delta = 30 * (1000 / 1591)  # 2 week
     else:
         facebook_path = os.path.join(os.getcwd(), "storage", "datasets", "facebook_filtered",
                                      "facebook-wall-filtered.txt")
         train_tup, all_tup, nodes_not_in_train = fit_model.read_csv_split_train(facebook_path, delimiter=' ')
-        events_dict_train, T_train, n_nodes_train, n_events_train, id_node_map_train = train_tup
-        events_dict_all, T_all, n_nodes_all, n_events_all, id_node_map_all = all_tup
+        events_dict_train, n_nodes_train, T_train, n_events_train, id_node_map_train = train_tup
+        events_dict_all, n_nodes_all, T_all, n_events_all, id_node_map_all = all_tup
 
 
     print(f"Experiments: Model = {'CHIP' if CHIP else 'BHM'} & Dataset = {dataset}\n")
@@ -234,7 +261,7 @@ if __name__ == "__main__":
             node_mem_train, bp_mu_t, bp_alpha_t, bp_beta_t, events_dict_bp_train = chip_utils.fit_community_model(
                 events_dict_train, n_nodes_train, T_train, K, 0, -1, verbose=False)
             param = (bp_mu_t, bp_alpha_t, bp_beta_t)
-            end_time_fit = time.time()
+            fit_time = time.time() - start_fit_time
             # Add nodes that were not in train to the largest block
             node_mem_all = chip_utils.assign_node_membership_for_missing_nodes(node_mem_train, nodes_not_in_train)
             # Calculate log-likelihood given the entire dataset
@@ -244,12 +271,11 @@ if __name__ == "__main__":
             # Calculate log-likelihood given the train dataset
             ll_train = chip_utils.calc_full_log_likelihood(events_dict_bp_train, node_mem_train, bp_mu_t, bp_alpha_t, bp_beta_t,
                                                            T_train, K)
-            fit_time = end_time_fit - start_fit_time
             ll_all_event = ll_all / n_events_all
             ll_train_event = ll_train / n_events_train
             ll_test_event = (ll_all - ll_train) / (n_events_all - n_events_train)
-            print(f"K={K}:\ttrain={ll_train_event:.3f}\tall={ll_all_event:.3f}\ttest={ll_test_event:.3f}")
-            # print(f"{ll_train_event:.3f}\t{ll_all_event:.3f}\t{ll_test_event:.3f}\t{fit_time:.3f}")
+            print(f"K={K}:\ttrain={ll_train_event:.3f}\tall={ll_all_event:.3f}"
+                  f"\ttest={ll_test_event:.3f}\tfit time={fit_time:.3f}s")
 
             if save_fit:
                 # save fit parameters
@@ -260,6 +286,7 @@ if __name__ == "__main__":
                 fit_dict["ll_train"] = ll_train_event
                 fit_dict["ll_all"] = ll_all_event
                 fit_dict["ll_test"] = ll_test_event
+                fit_dict["fit_time(s)"] = fit_time
                 full_fit_path = f'/{save_path}/CHIP/{dataset}/test'
                 pickle_file_name = f"{full_fit_path}/k_{K}.p"
                 with open(pickle_file_name, 'wb') as f:
@@ -282,15 +309,14 @@ if __name__ == "__main__":
 
                 motif_dict = simulate_count_motif_experiment_chip_bhm(CHIP, dataset_motif, param, node_mem_train, K,
                                                                       T_train, motif_delta, n_sim=n_motif_simulations
-                                                                      , verbose=False)
+                                                                      , verbose=PRINT_DETAILS)
                 print(f"#simulations={n_motif_simulations}, MAPE={motif_dict['mape']:.1f}")
 
                 if save_motif:
-                    motif_dict["dataset_motif"] = dataset_motif
                     motif_dict["dataset_recip"] = recip
                     motif_dict["dataset_trans"] = trans
                     motif_dict["dataset_n_events"] = n_events_train
-                    full_motif_path = f"{save_path}/MotifCounts/CHIP/{dataset}/test"
+                    full_motif_path = f"{save_path}/CHIP/motif_counts/{dataset}/sim30"
                     pickle_file_name = f"{full_motif_path}/k{K}.p"
                     with open(pickle_file_name, 'wb') as f:
                         pickle.dump(motif_dict, f)
@@ -314,7 +340,7 @@ if __name__ == "__main__":
                 print(f'at K={K}: AUC-avg={np.average(auc):.5f}, AUC-std={auc.std():.3f}')
                 # print(f'{fit_dict["ll_test"]:.5f}\t{K}\t{np.average(auc):.5f}\t{auc.std():.3f}')
                 if save_link:
-                    pickle_file_name = f"{save_path}/BHM/{dataset}_auc_K_{K}.p"
+                    pickle_file_name = f"{save_path}/CHIP/AUC/{dataset}/auc_K_{K}.p"
                     auc_dict = {"t0": t0s, "auc": auc, "avg": np.average(auc), "std": auc.std(), "y__runs": y_runs,
                                 "pred_runs": pred_runs}
                     with open(pickle_file_name, 'wb') as f:
@@ -322,12 +348,13 @@ if __name__ == "__main__":
 
         # BHM experiments
         else:
-            print("K = ", K)
             try:
                 if FIT_MODEL:
                     # Fitting the model to the train data
+                    fit_start_time = time.time()
                     node_mem_train, bp_mu_t, bp_alpha_t, bp_beta_t, events_dict_bp_train = bhm_utils.fit_block_model(events_dict_train,
                         n_nodes_train, T_train, K, local_search_max_iter=200, local_search_n_cores=0, verbose=False)
+                    fit_time = time.time() - fit_start_time
                     param = (bp_mu_t, bp_alpha_t, bp_beta_t)
                     # Add nodes that were not in train to the largest block
                     node_mem_all = chip_utils.assign_node_membership_for_missing_nodes(node_mem_train, nodes_not_in_train)
@@ -345,7 +372,8 @@ if __name__ == "__main__":
                     ll_all_event = ll_all / n_events_all
                     ll_train_event = ll_train / n_events_train
                     ll_test_event = (ll_all - ll_train) / (n_events_all - n_events_train)
-                    print(f"K={K}:\ttrain={ll_train_event:.3f}\tall={ll_all_event:.3f}\ttest={ll_test_event:.3f}")
+                    print(f"K={K}:\ttrain={ll_train_event:.3f}\tall={ll_all_event:.3f}"
+                          f"\ttest={ll_test_event:.3f}\tfit time={fit_time:.3f}s")
                     # print(f"{ll_train_event:.3f}\t{ll_all_event:.3f}\t{ll_test_event:.3f}")
 
                     if save_fit:
@@ -357,13 +385,14 @@ if __name__ == "__main__":
                         fit_dict["ll_all"] = ll_all_event
                         fit_dict["ll_test"] = ll_test_event
                         fit_dict["local_search"] = 200
-                        full_fit_path = f'/{save_path}/BHM/{dataset}/test'
+                        fit_dict["fit_time(s)"] = fit_time
+                        full_fit_path = f'/{save_path}/BHM/fit_parameters/{dataset}'
                         pickle_file_name = f"{full_fit_path}/k_{K}.p"
                         with open(pickle_file_name, 'wb') as f:
                             pickle.dump(fit_dict, f)
                 else:
                     # read fit
-                    full_fit_path = f'/{save_path}/BHM/{dataset}/test'
+                    full_fit_path = f'/{save_path}/BHM/fit_parameters/{dataset}'
                     pickle_file_name = f"{full_fit_path}/k_{K}.p"
                     with open(pickle_file_name, 'rb') as f:
                         fit_dict = pickle.load(f)
@@ -386,15 +415,14 @@ if __name__ == "__main__":
 
                     motif_dict = simulate_count_motif_experiment_chip_bhm(CHIP, dataset_motif, param, node_mem_train, K,
                                                                           T_train, motif_delta,
-                                                                          n_sim=n_motif_simulations, verbose=False)
+                                                                          n_sim=n_motif_simulations, verbose=PRINT_DETAILS)
                     print(f"#simulations={n_motif_simulations}, MAPE={motif_dict['mape']:.1f}")
 
                     if save_motif:
-                        motif_dict["dataset_motif"] = dataset_motif
                         motif_dict["dataset_recip"] = recip
                         motif_dict["dataset_trans"] = trans
                         motif_dict["dataset_n_events"] = n_events_train
-                        full_motif_path = f"{save_path}/MotifCounts/BHM/{dataset}/test"
+                        full_motif_path = f"{save_path}/BHM/motif_counts/{dataset}/sim30"
                         pickle_file_name = f"{full_motif_path}/k{K}.p"
                         with open(pickle_file_name, 'wb') as f:
                             pickle.dump(motif_dict, f)
@@ -418,16 +446,15 @@ if __name__ == "__main__":
                     print(f'at K={K}: AUC-avg={np.average(auc):.5f}, AUC-std={auc.std():.3f}')
                     # print(f'{fit_dict["ll_test"]:.5f}\t{K}\t{np.average(auc):.5f}\t{auc.std():.3f}')
                     if save_link:
-                        pickle_file_name = f"{save_path}/BHM/{dataset}_auc_K_{K}.p"
+                        pickle_file_name = f"{save_path}/BHM/AUC/{dataset}/auc_K_{K}.p"
                         auc_dict = {"t0": t0s, "auc": auc, "avg": np.average(auc), "std": auc.std(), "y__runs": y_runs,
                                     "pred_runs": pred_runs}
                         with open(pickle_file_name, 'wb') as f:
                             pickle.dump(auc_dict, f)
 
-            except Exception:
+            except Exception as e:
+                print(e)
                 pass
-
-
 
 
 

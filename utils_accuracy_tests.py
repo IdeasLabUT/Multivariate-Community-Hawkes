@@ -1,11 +1,9 @@
 """MULCH performance evaluation helper functions
 
-This scripts contains functions for:
- - motif count experiment
+This scripts contains helper functions for:
+ - motifs count experiment
  - link prediction experiment
 """
-# TODO Test code here and from MID and other dataset file
-# TODO remove old link prediction functions
 
 
 import networkx as nx
@@ -14,16 +12,11 @@ from bisect import bisect_left
 # from scipy import integrate
 from sklearn import metrics
 import matplotlib.pyplot as plt
-import sys
-from utils_fit_refine_mulch import fit_refinement_mulch
 from utils_fit_bp import cal_num_events
 from utils_fit_model import event_dict_to_adjacency
 from utils_generate_model import simulate_mulch
 from dynetworkx import ImpulseDiGraph
 
-sys.path.append("./CHIP-Network-Model")
-from dataset_utils import load_enron_train_test, load_reality_mining_test_train
-import utils_fit_model as mulch_fit
 
 
 
@@ -103,6 +96,7 @@ def simulate_count_motif_experiment(dataset_motif_tuple, params_tup, nodes_mem, 
     block_prob = block_count / sum(block_count)
     sim_motif_avg = np.zeros((6, 6))
     sim_motif_all = np.zeros((n_sim, 6, 6))
+    sim_mape_all = np.zeros(n_sim)
     sim_n_events_avg, sim_trans_avg, sim_recip_avg = 0, 0, 0
     for run in range(n_sim):
         # simulate using fitted parameters
@@ -113,10 +107,13 @@ def simulate_count_motif_experiment(dataset_motif_tuple, params_tup, nodes_mem, 
         # count reciprocity, transitivity, motif_counts, #events
         recip_sim, trans_sim, sim_motif, n_evens_sim = cal_recip_trans_motif(events_dict_sim, n_nodes,
                                                                 motif_delta, verbose)
+        sim_mape_all[run] = 100 / 36 * np.sum(np.abs(sim_motif - (dataset_motif + 1))
+                                              / (dataset_motif + 1))
         sim_motif_avg += sim_motif
         sim_motif_all[run, :, :] = sim_motif
         if verbose:
-            print(f"\trecip={recip_sim:.4f}, trans={trans_sim:.4f}, n_events={n_evens_sim}")
+            print(f"\trecip={recip_sim:.4f}, trans={trans_sim:.4f}, n_events={n_evens_sim}"
+                  f", MAPE={sim_mape_all[run]:.1f}")
         sim_recip_avg += recip_sim
         sim_trans_avg += trans_sim
         sim_n_events_avg += n_evens_sim
@@ -148,6 +145,7 @@ def simulate_count_motif_experiment(dataset_motif_tuple, params_tup, nodes_mem, 
     results_dict["sim_trans_avg"] = sim_trans_avg
     results_dict["sim_n_events_avg"] = sim_n_events_avg
     results_dict["mape"] = mape
+    results_dict["mape_all"] = sim_mape_all
 
     return results_dict
 
@@ -406,116 +404,6 @@ def mulch_uv_intensity_off(t, uv, params, events_dict, events_dict_r, t0):
     return intensity
 
 
-def old_mulch_predict_probs_and_actual(n_nodes, t0, delta, events_dict, params_tup, nodes_mem_all):
-    """
-    Computes the predicted probability that a link from u to v appears in
-    [t, t + delta)
-    """
-    mu_bp, alpha_s_bp, alpha_r_bp, alpha_tc_bp, alpha_gr_bp, alpha_al_bp, alpha_alr_bp, C_bp, betas = params_tup
-    K = len(mu_bp)
-    # hold timestamps < t0, and compute [t0 - timestamps]
-    events_dict_less_t0 = {}
-    for u, v in events_dict:
-        t_uv = np.array(events_dict[(u, v)])
-        # index of timestamps < t0
-        index = bisect_left(t_uv, t0)
-        events_dict_less_t0[(u, v)] = t0 - t_uv[:index]
-    bp_events_dict_less_t0 = mulch_fit.events_dict_to_events_dict_bp(events_dict_less_t0, nodes_mem_all, K)
-    prob_dict = np.zeros((n_nodes, n_nodes))  # Predicted probs that link exists
-    y = np.zeros((n_nodes, n_nodes))  # actual link
-    for u in range(n_nodes):
-        for v in range(n_nodes):
-            if u != v:
-                u_b, v_b = nodes_mem_all[u], nodes_mem_all[v]
-                par = (
-                mu_bp[u_b, v_b], alpha_s_bp[u_b, v_b], alpha_r_bp[u_b, v_b], alpha_tc_bp[u_b, v_b], alpha_gr_bp[u_b, v_b],
-                alpha_al_bp[u_b, v_b], alpha_alr_bp[u_b, v_b], C_bp[u_b, v_b], betas)
-                if u_b == v_b:
-                    # integral = \
-                    #     integrate.quad(mulch_uv_intensity_dia, t0, t0 + delta,
-                    #                    args=((u, v), par, bp_events_dict[u_b][v_b], t0), limit=100)[0]
-                    integral2 = old_mulch_uv_intensity_dia_integral(delta, (u, v), par, bp_events_dict_less_t0[u_b][v_b])
-                else:
-                    # integral = integrate.quad(mulch_uv_intensity_off, t0, t0 + delta,
-                    #                           args=((u, v), par, bp_events_dict[u_b][v_b], bp_events_dict[v_b][u_b], t0),
-                    #                           limit=100)[0]
-                    integral2 = old_mulch_uv_intensity_off_integral(delta, (u, v), par, bp_events_dict_less_t0[u_b][v_b],
-                                                                 bp_events_dict_less_t0[v_b][u_b])
-
-                prob_dict[u, v] = 1 - np.exp(-integral2)
-
-                if (u, v) in events_dict:
-                    uv_times = np.array(events_dict[(u, v)])
-                    if len(uv_times[np.logical_and(uv_times >= t0, uv_times <= t0 + delta)]) > 0:
-                        y[u, v] = 1
-
-    return y, prob_dict
-def old_mulch_uv_intensity_dia_integral(delta, uv, params, events_dict):
-    mu, alpha_s, alpha_r, alpha_tc, alpha_gr, alpha_al, alpha_alr, C, betas = params
-    u, v = uv
-    Q = len(betas)
-    integral = mu * delta
-    # assume all timestamps in events_dict are less than t0
-    for (x, y) in events_dict:
-        t0_minus_txy = events_dict[(x, y)]
-        exp_sum_q = 0
-        for q in range(Q):
-            exp_sum_q += C[q] * (np.exp(-betas[q]*delta) - 1) * np.sum(np.exp(-betas[q] * t0_minus_txy))
-        if (u, v) == (x, y):  # same node_pair events (alpha_s)
-            integral -= alpha_s* exp_sum_q
-        elif (v, u) == (x, y):  # reciprocal node_pair events (alpha_r)
-            integral -= alpha_r * exp_sum_q
-        # br node_pairs events (alpha_tc)
-        elif u == x and v != y:
-            integral -= alpha_tc * exp_sum_q
-        # gr node_pairs events (alpha_gr)
-        elif u == y and v != x:
-            integral -= alpha_gr * exp_sum_q
-        # alliance np (alpha_al)
-        elif v == y and u != x:
-            integral -= alpha_al * exp_sum_q
-        # alliance reciprocal np (alpha_alr)
-        elif v == x and u != y:
-            integral -= alpha_alr * exp_sum_q
-    return integral
-def old_mulch_uv_intensity_off_integral(delta, uv, params, events_dict, events_dict_r):
-    # assume timestamps in events_dict, events_dict_r are less than t0
-    mu, alpha_s, alpha_r, alpha_tc, alpha_gr, alpha_al, alpha_alr, C, betas = params
-    u, v = uv
-    Q = len(betas)
-    integral = mu * delta
-    # loop through node pairs in block pair ab
-    for (x, y) in events_dict:
-        t0_minus_txy = events_dict[(x, y)]
-        exp_sum_q = 0
-        for q in range(Q):
-            exp_sum_q += C[q] * (np.exp(-betas[q] * delta) - 1) * np.sum(np.exp(-betas[q] * t0_minus_txy))
-        # same node_pair events (alpha_s)
-        if (u, v) == (x, y):
-            integral -= alpha_s* exp_sum_q
-        # br node_pairs events (alpha_tc)
-        elif u == x and v != y:
-            integral -= alpha_tc * exp_sum_q
-        # alliance np (alpha_al)
-        elif v == y and u != x:
-            integral -= alpha_alr * exp_sum_q
-    # loop through node pairs in reciprocal block pair ba
-    for (x, y) in events_dict_r:
-        t0_minus_txy = events_dict_r[(x, y)]
-        exp_sum_q = 0
-        for q in range(Q):
-            exp_sum_q += C[q] * (np.exp(-betas[q] * delta) - 1) * np.sum(np.exp(-betas[q] * t0_minus_txy))
-        # reciprocal node_pair events (alpha_r)
-        if (v, u) == (x, y):
-            integral -= alpha_r * exp_sum_q
-        # gr node_pairs events (alpha_gr)
-        elif u == y and v != x:
-            integral -= alpha_gr * exp_sum_q
-        # alliance reciprocal np (alpha_alr)
-        elif v == x and u != y:
-            integral -= alpha_alr * exp_sum_q
-    return integral
-
 def calculate_auc(y, preds, show_figure=False):
     """return AUC score between true and predicted link probabilities for all node pairs in network"""
     fpr, tpr, thresholds = metrics.roc_curve(y.flatten(), preds.flatten(), pos_label=1)
@@ -532,44 +420,3 @@ def calculate_auc(y, preds, show_figure=False):
         # plt.legend(loc="lower right")
         plt.show()
     return roc_auc
-
-
-#%% motif count
-
-if __name__ == "__main__":
-
-    link_pred_delta = 60
-    train_tuple, test_tuple, all_tuple, nodes_not_in_train = load_reality_mining_test_train(
-        remove_nodes_not_in_train=True)
-    events_dict_train, n_nodes_train, end_time_train = train_tuple
-    events_dict_all, n_nodes_all, end_time_all = all_tuple
-    K = 1
-    betas_recip = np.array([7, 1, 1 / 24]) * (1000 / 150)  # [1week, 2day, 1hour]
-    betas = np.reciprocal(betas_recip)
-    print(f"Reality Mining Dataset at K = {K}")
-
-    sp_tup, ref_tup, ref_message = fit_refinement_mulch(events_dict_train, n_nodes_train, end_time_train, K,
-                                                        betas, n_alpha=6, max_ref_iter=0, verbose=True)
-
-    # spectral clustering fit results
-    nodes_mem_train_sp, fit_param_sp, ll_train_sp, n_events_train, fit_time_sp = sp_tup
-    node_mem_all_sp = mulch_fit.assign_node_membership_for_missing_nodes(nodes_mem_train_sp, nodes_not_in_train)
-
-    print("Link Prediction Experiments at delta=", link_pred_delta)
-    t0s = np.loadtxt(f"storage/t0/RealityMining_t0.csv", delimiter=',', usecols=1)
-    runs = len(t0s)
-    auc = np.zeros(runs)
-    y_runs = np.zeros((n_nodes_all, n_nodes_all, runs))
-    pred_runs = np.zeros((n_nodes_all, n_nodes_all, runs))
-    for i, t0 in enumerate(t0s):
-        # t0 = np.random.uniform(low=end_time_train, high=end_time_all - delta, size=None)
-        y_mulch, pred_mulch = mulch_predict_probs_and_actual(n_nodes_all, t0, link_pred_delta, events_dict_all,
-                                                              fit_param_sp, node_mem_all_sp)
-        y_runs[:, :, i] = y_mulch
-        pred_runs[:, :, i] = pred_mulch
-        auc[i] = calculate_auc(y_mulch, pred_mulch, show_figure=False)
-        print(f"at i={i} -> auc={auc[i]}")
-
-    print(f"{K}\t{np.average(auc):.5f}\t{auc.std():.3f}")
-
-

@@ -36,6 +36,7 @@ For each dataset, we can set the following variables:
 # TODO should I remove the filtered facebook dataset
 # TODO add fb-forum
 # TODO motif and link experiments are only for reality and enron
+# TODO removed condition only fot enron and reality mining
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -58,27 +59,27 @@ if __name__ == "__main__":
     
     docker = False
     if docker:
-        save_path = f"/data"  # when called from docker
+        save_path = f"/result"  # when called from docker
     else:
         save_path = f'/shared/Results/MultiBlockHawkesModel'
 
     PRINT_DETAILS = True   # print intermediate details of fitting and other test experiments
 
     """ Model Fitting"""
-    FIT_MODEL = True  # either fit mulch or read saved fit
-    K_range = [2]  # number of blocks (K) range ex: range(1,11)
-    n_alpha = 6  # number of excitations types choose between 2, 4, or 6
+    FIT_MODEL = True # either fit mulch or read saved fit - if False, specify read path
+    K_range = range(1,11) # number of blocks (K) range ex: range(1,11)
+    n_alpha =  6 # number of excitations types choose between 2, 4, or 6
     save_fit = False  # save fitted model - specify path
-    REF_ITER = 4  # maximum refinement interation - set to 0 for no refinement
+    REF_ITER = 1  # maximum refinement interation - set to 0 for no refinement
 
     """ Simulation from fit parameters and count motifs experiment"""
     motif_experiment = True
-    n_motif_simulations = 2 # number of simulations to count motifs on
+    n_motif_simulations = 5 # number of simulations to count motifs on
     save_motif = False # save simulation motif counts - specify save path in code
 
     """ link prediction experiment"""
-    link_prediction_experiment = True
-    save_link = False  # save link prediction results specify path in code
+    link_prediction_experiment = False
+    save_link = True  # save link prediction results specify path in code
 
 
     np.set_printoptions(suppress=True)  # always print floating point numbers using fixed point notation
@@ -90,7 +91,8 @@ if __name__ == "__main__":
         events_dict_all, n_nodes_all, end_time_all = all_tup
         # betas_recip = np.array([7, 1/2, 1 / 24]) * (1000 / 150)  # [1week, 1/2day, 1hour]
         # betas_recip = np.array([7*2, 1, 1/12]) * (1000 / 150)  # [2week, 1day, 2hour]
-        betas_recip = np.array([7, 1, 1 / 24]) * (1000 / 150)  # [1week, 2day, 1hour]
+        # betas_recip = np.array([4, 1, 1/4]) * (1000 / 150)  # [4days, 1day, 1/4day]
+        betas_recip = np.array([7, 1, 1 / 24]) * (1000 / 150)  # [1week, 2day, 1hour] <- paper
         betas = np.reciprocal(betas_recip)
         motif_delta = 45  # week
         link_pred_delta = 60 # should be two weeks
@@ -100,7 +102,7 @@ if __name__ == "__main__":
         events_dict_all, n_nodes_all, end_time_all = all_tup
         # betas_recip = np.array([7, 1 / 2, 1 / 24]) * (1000 / 60)  # [1week, 1/2day, 1hour]
         # betas_recip = np.array([7*2, 1, 1/12]) * (1000 / 60)  # [2week, 1day, 2hour]
-        betas_recip = np.array([7, 2, 1 / 4]) * (1000 / 60)  # [1week, 2days, 6 hour]
+        betas_recip = np.array([7, 2, 1 / 4]) * (1000 / 60)  # [1week, 2days, 6 hour] <- paper
         betas = np.reciprocal(betas_recip)
         motif_delta = 100  # week
         link_pred_delta = 125 # week and quarter
@@ -110,7 +112,12 @@ if __name__ == "__main__":
                                                                                     train_percentage=0.8)
         events_dict_train, n_nodes_train, end_time_train = train_tup
         events_dict_all, n_nodes_all, end_time_all = all_tup
-        betas = np.array([0.02, 0.2, 20])  # [2 month , 1 week , 2 hours]
+        betas = np.array([0.02, 0.2, 20])  # almost [2 month , 1 week , 2 hours]
+        # note: dataset_duration = 1591 days  &  test_period = 90 days
+        motif_delta = 14 * (1000 / 1591)  # 2 weeks
+        link_pred_delta = 14 * (1000 / 1591)  # 2 week
+        # another suggested beta
+        # betas = np.reciprocal(np.array([30, 2, 3/24]) * (1000/1591)) # [1month, 2days, 3hours]
     else:
         facebook_path = os.path.join(os.getcwd(), "storage", "datasets", "facebook_filtered",
                                      "facebook-wall-filtered.txt")
@@ -125,7 +132,7 @@ if __name__ == "__main__":
 
 #%% fit MULCH with refinement
     if len(K_range) > 0:
-        print(f"Fit {dataset} using {n_alpha}-alpha MULCH at betas={betas}, max #refinement iterations={REF_ITER}")
+        print(f"Fit {dataset} using {n_alpha}-alpha MULCH at betas={betas}, max #ref={REF_ITER}")
     for K in K_range:
         if FIT_MODEL:
             print("\nFit MULCH at K=", K)
@@ -155,10 +162,10 @@ if __name__ == "__main__":
             ll_train_event_ref = ll_train_ref / n_events_train
             ll_test_event_ref = (ll_all_ref - ll_train_ref) / (n_events_all - n_events_train)
 
-            print(f"->Spectral log-likelihood:\ttrain={ll_train_event_sp:.3f}\tall={ll_all_event_sp:.3f}"
-                  f"\ttest={ll_test_event_sp:.3f}")
-            print(f"->Refinement log-likelihood:  \ttrain={ll_train_event_ref:.3f}\tall={ll_all_event_ref:.3f}"
-                f"\ttest={ll_test_event_ref:.3f}")
+            print(f"->Spectral log-likelihood:\ttrain={ll_train_event_sp:.3f}"
+                  f"\tall={ll_all_event_sp:.3f}\ttest={ll_test_event_sp:.3f}")
+            print(f"->Refinement log-likelihood:  \ttrain={ll_train_event_ref:.3f}"
+                  f"\tall={ll_all_event_ref:.3f}\ttest={ll_test_event_ref:.3f}")
 
 
             if save_fit:
@@ -181,14 +188,14 @@ if __name__ == "__main__":
                 fit_dict["fit_time_ref(s)"] = fit_time_ref
                 fit_dict["train_end_time"] = end_time_train
                 fit_dict["all_end_time"] = end_time_all
-                full_fit_path = f'/{save_path}/{dataset}/test'
+                full_fit_path = f'/{save_path}/{dataset}/{n_alpha}alpha/ref/4day1day1_4day'
                 pickle_file_name = f"{full_fit_path}/k_{K}.p"
                 with open(pickle_file_name, 'wb') as f:
                     pickle.dump(fit_dict, f)
 
         # read saved fit
         else:
-            full_fit_path = f"/{save_path}/{dataset}/6alpha_KernelSum_Ref_batch/2month1week2hour"
+            full_fit_path = f'/{save_path}/{dataset}/{n_alpha}alpha/ref'
             with open(f"{full_fit_path}/k_{K}.p", 'rb') as f:
                 fit_dict = pickle.load(f)
             # refinement parameters
@@ -204,7 +211,7 @@ if __name__ == "__main__":
 
 
         # Simulation and motif experiments
-        if motif_experiment and (dataset == "RealityMining" or dataset == "Enron"):
+        if motif_experiment:
             print(f"\n\nMotifs Count Experiment at delta={motif_delta} (#simulations={n_motif_simulations})")
             # # ---> Either run motif counts on dataset
             # # compute dataset's reciprocity, transitivity, and (6, 6) temporal motifs counts matrix
@@ -223,8 +230,12 @@ if __name__ == "__main__":
             # dataset_motif_tup = (recip, trans, dataset_motif, n_events_train)
 
             # ---> OR read networks recip, trans, motifs count from saved pickle
-            with open(f"storage/datasets_motif_counts/week_{dataset}_counts.p", 'rb') as f:
-                dataset_motif_dict = pickle.load(f)
+            if dataset == 'Facebook':
+                with open(f"storage/datasets_motif_counts/2week_{dataset}_counts.p", 'rb') as f:
+                    dataset_motif_dict = pickle.load(f)
+            else:
+                with open(f"storage/datasets_motif_counts/week_{dataset}_counts.p", 'rb') as f:
+                    dataset_motif_dict = pickle.load(f)
             dataset_motif = dataset_motif_dict["dataset_motif"]
             recip = dataset_motif_dict["dataset_recip"]
             trans = dataset_motif_dict["dataset_trans"]
@@ -240,25 +251,27 @@ if __name__ == "__main__":
             print(np.asarray(motif_test_dict["dataset_motif"], dtype=int))
             print("->average motifs count over ", n_motif_simulations, " simulations")
             print(np.asarray(motif_test_dict["sim_motif_avg"], dtype=int))
-            print(f'->MAPE = {motif_test_dict["mape"]:.2f}')
+            print(f'->at K={K}: MAPE = {motif_test_dict["mape"]:.2f}')
 
             if save_motif:
-                full_motif_path = f"{save_path}/MotifCounts/{dataset}/test"  # 2month1week2hour
+                full_motif_path = f"{save_path}/MotifCounts/{dataset}/{n_alpha}alpha/ref_30sim"  # 2month1week2hour
                 pickle_file_name = f"{full_motif_path}/k{K}.p"
                 with open(pickle_file_name, 'wb') as f:
                     pickle.dump(motif_test_dict, f)
 
         # Link prediction experiment -- NOTE: used nodes in full dataset
-        if link_prediction_experiment and (dataset == "RealityMining" or dataset == "Enron"):
+        #  and (dataset == "RealityMining" or dataset == "Enron")
+        if link_prediction_experiment:
             print("\n\nLink Prediction Experiments at delta=", link_pred_delta)
 
             t0s = np.loadtxt(f"storage/t0/{dataset}_t0.csv", delimiter=',', usecols=1)
+            # t0 = np.random.uniform(low=end_time_train, high=end_time_all - link_pred_delta, size=100)
             runs = len(t0s)
             auc = np.zeros(runs)
             y_runs = np.zeros((n_nodes_all, n_nodes_all, runs))
             pred_runs = np.zeros((n_nodes_all, n_nodes_all, runs))
             for i, t0 in enumerate(t0s):
-                # t0 = np.random.uniform(low=end_time_train, high=end_time_all - delta, size=None)
+                # t0 = np.random.uniform(low=end_time_train, high=end_time_all - link_pred_delta, size=None)
                 y_mulch, pred_mulch = accuracy_tests.mulch_predict_probs_and_actual(n_nodes_all, t0, link_pred_delta,
                                                                                     events_dict_all, fit_param_ref, nodes_mem_all_ref)
                 y_runs[:, :, i] = y_mulch
@@ -266,12 +279,14 @@ if __name__ == "__main__":
                 auc[i] = accuracy_tests.calculate_auc(y_mulch, pred_mulch, show_figure=False)
                 if PRINT_DETAILS:
                     print(f"at i={i} -> auc={auc[i]}")
-            print(f"->average AUC={np.average(auc):.5f}, std={auc.std():.3f}")
+            print(f"->at K={K}: average AUC={np.average(auc):.5f}, std={auc.std():.3f}")
 
             if save_link:
-                full_link_path = f"{save_path}/AUC/{dataset}"
+                full_link_path = f"{save_path}/AUC/{dataset}/{n_alpha}alpha"
                 pickle_file_name = f"{full_link_path}/auc_k{K}.p"
                 auc_dict = {"t0": t0s, "auc": auc, "avg": np.average(auc), "std": auc.std(), "y__runs": y_runs,
                             "pred_runs": pred_runs, "ll_test": ll_test_event_ref}
+                # auc_dict = {"t0": t0s, "auc": auc, "avg": np.average(auc), "std": auc.std(),
+                #             "ll_test": ll_test_event_ref}
                 with open(pickle_file_name, 'wb') as f:
                     pickle.dump(auc_dict, f)
