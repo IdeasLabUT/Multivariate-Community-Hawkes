@@ -178,7 +178,7 @@ if __name__ == "__main__":
 
     """ motif simulation """
     motif_experiment = True
-    n_motif_simulations = 1
+    n_motif_simulations = 10
     save_motif = False  # save motif count experiments
 
     """ link prediction """
