@@ -71,18 +71,17 @@ if __name__ == "__main__":
     # read specified dataset. For each, betas, motif delta, and link_pred_delta are specified
     if dataset == "RealityMining":
         train_tup, test_tuple, all_tup, nodes_not_in_train = load_reality_mining_test_train(remove_nodes_not_in_train=False)
-        events_dict_train, n_nodes_train, end_time_train = train_tup
-        events_dict_all, n_nodes_all, end_time_all = all_tup
+        events_dict_train, n_nodes_train, T_train = train_tup
+        events_dict_all, n_nodes_all, T_all = all_tup
         # betas_recip = np.array([7*2, 1, 1/12]) * (1000 / 150)  # [2week, 1day, 2hour]
         betas_recip = np.array([7, 1, 1 / 24]) * (1000 / 150)  # [1week, 2day, 1hour] <- paper
         betas = np.reciprocal(betas_recip)
         motif_delta = 45  # week
-        link_pred_delta = 60 # should be two weeks
+        link_pred_delta = 60    # should be two weeks
     elif dataset == "Enron":
         train_tup, test_tuple, all_tup, nodes_not_in_train = load_enron_train_test(remove_nodes_not_in_train=False)
-        events_dict_train, n_nodes_train, end_time_train = train_tup
-        events_dict_all, n_nodes_all, end_time_all = all_tup
-        # betas_recip = np.array([7, 1 / 2, 1 / 24]) * (1000 / 60)  # [1week, 1/2day, 1hour]
+        events_dict_train, n_nodes_train, T_train = train_tup
+        events_dict_all, n_nodes_all, T_all = all_tup
         # betas_recip = np.array([7*2, 1, 1/12]) * (1000 / 60)  # [2week, 1day, 2hour]
         betas_recip = np.array([7, 2, 1 / 4]) * (1000 / 60)  # [1week, 2days, 6 hour] <- paper
         betas = np.reciprocal(betas_recip)
@@ -92,8 +91,8 @@ if __name__ == "__main__":
         train_tup, test_tuple, all_tup, nodes_not_in_train = load_facebook_wall(timestamp_max=1000,
                                                                                     largest_connected_component_only=True,
                                                                                     train_percentage=0.8)
-        events_dict_train, n_nodes_train, end_time_train = train_tup
-        events_dict_all, n_nodes_all, end_time_all = all_tup
+        events_dict_train, n_nodes_train, T_train = train_tup
+        events_dict_all, n_nodes_all, T_all = all_tup
         betas = np.array([0.02, 0.2, 20])  # almost [2 month , 1 week , 2 hours]
         # note: dataset_duration = 1591 days  &  test_period = 90 days
         motif_delta = 14 * (1000 / 1591)  # 2 weeks
@@ -106,7 +105,7 @@ if __name__ == "__main__":
         print(f"Fit {dataset} using {n_alpha}-alpha MULCH at betas={betas}, max #ref={REF_ITER}")
     for K in K_range:
         print("\nFit MULCH at K=", K)
-        sp_tup, ref_tup, ref_message = fit_refinement_mulch(events_dict_train, n_nodes_train, end_time_train, K,
+        sp_tup, ref_tup, ref_message = fit_refinement_mulch(events_dict_train, n_nodes_train, T_train, K,
                                                             betas, n_alpha, max_ref_iter=REF_ITER, verbose=PRINT_DETAILS)
 
         # Fit results using spectral clustering for node membership
@@ -114,7 +113,7 @@ if __name__ == "__main__":
         # full dataset nodes membership
         node_mem_all_sp = fit_model.assign_node_membership_for_missing_nodes(nodes_mem_train_sp, nodes_not_in_train)
         ll_all_sp, n_events_all = fit_model.log_likelihood_mulch(fit_param_sp, events_dict_all, node_mem_all_sp, K,
-                                                                 end_time_all)
+                                                                 T_all)
         # train, full, test log-likelihoods per event
         ll_train_event_sp = ll_train_sp / n_events_train
         ll_all_event_sp = ll_all_sp / n_events_all
@@ -126,7 +125,7 @@ if __name__ == "__main__":
         nodes_mem_all_ref = fit_model.assign_node_membership_for_missing_nodes(nodes_mem_train_ref,
                                                                                nodes_not_in_train)
         ll_all_ref, n_events_all = fit_model.log_likelihood_mulch(fit_param_ref, events_dict_all, nodes_mem_all_ref,
-                                                                  K, end_time_all)
+                                                                  K, T_all)
         # train, full, test log-likelihoods per event
         ll_all_event_ref = ll_all_ref / n_events_all
         ll_train_event_ref = ll_train_ref / n_events_train
@@ -156,9 +155,9 @@ if __name__ == "__main__":
             fit_dict["n_classes"] = K
             fit_dict["fit_time_sp(s)"] = fit_time_sp
             fit_dict["fit_time_ref(s)"] = fit_time_ref
-            fit_dict["train_end_time"] = end_time_train
-            fit_dict["all_end_time"] = end_time_all
-            pickle_file_name = f"{dataset}_fit_k_{K}.p"
+            fit_dict["train_end_time"] = T_train
+            fit_dict["all_end_time"] = T_all
+            pickle_file_name = f"{dataset}_mulch_fit_k_{K}.p"
             with open(pickle_file_name, 'wb') as f:
                 pickle.dump(fit_dict, f)
 
@@ -187,7 +186,7 @@ if __name__ == "__main__":
 
             # run simulation and count motifs
             motif_test_dict = accuracy_tests.simulate_count_motif_experiment(dataset_motif_tup, fit_param_ref, nodes_mem_train_ref,
-                                                                             K, end_time_train, motif_delta, n_sim=n_motif_simulations,
+                                                                             K, T_train, motif_delta, n_sim=n_motif_simulations,
                                                                              verbose=PRINT_DETAILS)
             print("\n->actual dataset motifs count at delta=", motif_delta)
             print(np.asarray(motif_test_dict["dataset_motif"], dtype=int))
@@ -208,7 +207,7 @@ if __name__ == "__main__":
             # t0s_path = os.path.join(os.getcwd(), "storage", "t0", f"{dataset}_t0.csv")
             # t0s = np.loadtxt(t0s_path, delimiter=',', usecols=1)
 
-            t0s = np.random.uniform(low=end_time_train, high=end_time_all - link_pred_delta, size=100)
+            t0s = np.random.uniform(low=T_train, high=T_all - link_pred_delta, size=100)
             runs = len(t0s)
             auc = np.zeros(runs)
             y_runs = np.zeros((n_nodes_all, n_nodes_all, runs))
