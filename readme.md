@@ -9,7 +9,7 @@ paper, presented at **International Conference on Machine Learning (ICML 2022)**
 
 ### Description
 
-Dynamic networks are in format of timestamped events between nodes pair (x, y, t<sup>xy</sup>). We
+Dynamic networks are in format of timestamped events between nodes pairs (x, y, t<sup>xy</sup>). We
 jointly model all node pairs using a multivariate Hawkes process where an event between a node
 pair (x, y) can increase the probability of events between same and other node pairs (i, j).
 
@@ -51,7 +51,7 @@ paper [MULCH](https://arxiv.org/abs/2205.00639 "The Multivariate Community Hawke
     3. MULCH parameters estimation accuracy
 
 - `mulch_MID_test.py` fits MULCH on MID dataset, then runs some evaluation performance
-  experiments (subsection 5.2). A code snippet from `mulch_MID_test.py` is discussed in the *Usage
+  experiments (subsection 5.2). A code snippet from this file is discussed in the *Usage
   Instructions* section below.
 
 - `mulch_datasets_experiments.py` Fit MULCH on Reality Mining, Enron, Facebook datasets, and
@@ -66,9 +66,9 @@ paper [MULCH](https://arxiv.org/abs/2205.00639 "The Multivariate Community Hawke
 
 ## Installation
 
-To clone, use `git clone --recurse-submodules` + repo URL
+To clone, use `git clone --recurse-submodules ` + repo URL
 
-which will automatically initialize and update CHIP as a submodule in `CHIP-Network-Model directory.
+which will automatically initialize and update CHIP as a submodule in `CHIP-Network-Model` directory.
 
 Alternatively, run the following commands from MULCH directory after cloning:
 ```
@@ -79,10 +79,8 @@ git submodule update
 ### Dependencies
 
 - CHIP model's code is added as a submodule in the directory `CHIP-Network-Model`.
-
 - `DyNetworkX` package, used for motif count experiments, is also included as a directory.
-
-- Modified `hawkes` repository by Steve Morse for model simulation.
+- Modified `hawkes` repository by Steve Morse for model simulation (included as a directory).
 
 ### Requirements
 

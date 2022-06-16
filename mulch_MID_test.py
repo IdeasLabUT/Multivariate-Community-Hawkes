@@ -36,15 +36,14 @@ import utils_accuracy_tests as accuracy_test
 from utils_fit_refine_mulch import fit_refinement_mulch
 import utils_fit_model as fit_model
 
-
-#%% Load MID incident data and fit multivariate block Hawkes model
+# %% Load MID incident data and fit multivariate block Hawkes model
 if __name__ == "__main__":
 
-    PRINT_DETAILS = True   # print intermediate details of fitting and other test experiments
+    PRINT_DETAILS = True  # print intermediate details of fitting and other test experiments
 
     """ Model Fitting """
-    K_range = range(1,11)  # number of blocks (K) range ex: range(1,11)
-    n_alpha = 6 # number of excitations types choose between 2, 4, or 6
+    K_range = range(1, 11)  # number of blocks (K) range ex: range(1,11)
+    n_alpha = 6  # number of excitations types choose between 2, 4, or 6
     REF_ITER = 7  # maximum refinement interation - set to 0 for no refinement
     betas_recip = np.array([2 * 30, 2 * 7, 1 / 2]) * (1000 / 8380)  # [2months, 2weeks, 1/2day]
     # betas_recip = np.array([30])* (1000 / 8380)   # [1 month]
@@ -53,41 +52,45 @@ if __name__ == "__main__":
 
     """ Simulation count motifs experiment"""
     motif_experiment = True
-    n_motif_simulations = 10 # number of simulations to count motifs on
+    n_motif_simulations = 10  # number of simulations to count motifs on
     save_motif = False  # save simulation motif counts
 
     """ link prediction experiment"""
     link_prediction_experiment = True
     save_link = False  # save link prediction results
 
-#%% Read MID and fit MULCH with refinement
+    # %% Read MID and fit MULCH with refinement
 
-    print("Load MID dataset - timestampes scaled [0:1000]")
+    print("Load MID dataset - timestamps scaled [0:1000]")
     file_path_csv = os.path.join(os.getcwd(), "storage", "datasets", "MID", "MID.csv")
     # read full data set and use 0.8 as train
-    train_tup, all_tup, nodes_not_in_train = fit_model.read_csv_split_train(file_path_csv, delimiter=',',
+    train_tup, all_tup, nodes_not_in_train = fit_model.read_csv_split_train(file_path_csv,
+                                                                            delimiter=',',
                                                                             remove_not_train=False)
     # train and full dataset tuples
     events_dict_train, n_nodes_train, T_train, n_events_train, id_node_map_train = train_tup
     events_dict_all, n_nodes_all, T_all, n_events_all, id_node_map_all = all_tup
 
     dataset = "MID"
-    link_pred_delta = 7.15 # two month link prediction delta
-    motif_delta_month = 4 # around one month motif delta
+    link_pred_delta = 7.15  # two month link prediction delta
+    motif_delta_month = 4  # around one month motif delta
 
-
-    if len(K_range) !=0:
+    if len(K_range) != 0:
         print(f"Fit MID using {n_alpha}-alpha MULCH at betas={betas}, max #refin_iter={REF_ITER}")
     for K in K_range:
         print("\nFit MULCH at K=", K)
-        sp_tup, ref_tup, ref_message = fit_refinement_mulch(events_dict_train, n_nodes_train, T_train, K,
-                                                            betas, n_alpha, max_ref_iter=REF_ITER, verbose=PRINT_DETAILS)
+        sp_tup, ref_tup, ref_message = fit_refinement_mulch(events_dict_train, n_nodes_train,
+                                                            T_train, K,
+                                                            betas, n_alpha, max_ref_iter=REF_ITER,
+                                                            verbose=PRINT_DETAILS)
 
         # Fit results using spectral clustering for node membership
         nodes_mem_train_sp, fit_param_sp, ll_train_sp, n_events_train, fit_time_sp = sp_tup
         # full dataset nodes membership
-        node_mem_all_sp = fit_model.assign_node_membership_for_missing_nodes(nodes_mem_train_sp, nodes_not_in_train)
-        ll_all_sp, n_events_all = fit_model.log_likelihood_mulch(fit_param_sp, events_dict_all, node_mem_all_sp, K,
+        node_mem_all_sp = fit_model.assign_node_membership_for_missing_nodes(nodes_mem_train_sp,
+                                                                             nodes_not_in_train)
+        ll_all_sp, n_events_all = fit_model.log_likelihood_mulch(fit_param_sp, events_dict_all,
+                                                                 node_mem_all_sp, K,
                                                                  T_all)
         # train, full, test log-likelihoods per event
         ll_all_event_sp = ll_all_sp / n_events_all
@@ -99,17 +102,20 @@ if __name__ == "__main__":
         # full dataset nodes membership
         nodes_mem_all_ref = fit_model.assign_node_membership_for_missing_nodes(nodes_mem_train_ref,
                                                                                nodes_not_in_train)
-        ll_all_ref, n_events_all = fit_model.log_likelihood_mulch(fit_param_ref, events_dict_all, nodes_mem_all_ref,
+        ll_all_ref, n_events_all = fit_model.log_likelihood_mulch(fit_param_ref, events_dict_all,
+                                                                  nodes_mem_all_ref,
                                                                   K, T_all)
         # train, full, test log-likelihoods per event
         ll_all_event_ref = ll_all_ref / n_events_all
         ll_train_event_ref = ll_train_ref / n_events_train
         ll_test_event_ref = (ll_all_ref - ll_train_ref) / (n_events_all - n_events_train)
 
-        print(f"->Spectral log-likelihood:\ttrain={ll_train_event_sp:.3f}\tall={ll_all_event_sp:.3f}"
-              f"\ttest={ll_test_event_sp:.3f}")
-        print(f"->Refinement log-likelihood:  \ttrain={ll_train_event_ref:.3f}\tall={ll_all_event_ref:.3f}"
-              f"\ttest={ll_test_event_ref:.3f}")
+        print(
+            f"->Spectral log-likelihood:\ttrain={ll_train_event_sp:.3f}\tall={ll_all_event_sp:.3f}"
+            f"\ttest={ll_test_event_sp:.3f}")
+        print(
+            f"->Refinement log-likelihood:  \ttrain={ll_train_event_ref:.3f}\tall={ll_all_event_ref:.3f}"
+            f"\ttest={ll_test_event_ref:.3f}")
 
         if PRINT_DETAILS:
             print("\n->Analyzing refinement node membership: Counties in each block")
@@ -143,9 +149,10 @@ if __name__ == "__main__":
             with open(pickle_file_name, 'wb') as f:
                 pickle.dump(fit_dict, f)
 
-        #%% Simulation and motif experiments
+        # %% Simulation and motif experiments
         if motif_experiment:
-            print(f"\n\nMotifs Count Experiment at delta={motif_delta_month} (#simulations={n_motif_simulations})")
+            print(
+                f"\n\nMotifs Count Experiment at delta={motif_delta_month} (#simulations={n_motif_simulations})")
 
             # # ---> Either run motif counts on dataset
             # recip, trans, dataset_motif, n_events_train = \
@@ -166,8 +173,10 @@ if __name__ == "__main__":
             dataset_motif_tup = (recip, trans, dataset_motif, n_events_train)
 
             # Simulate networks using MULCH fit parameters and compute reciprocity,  motif counts
-            motif_test_dict = accuracy_test.simulate_count_motif_experiment(dataset_motif_tup, fit_param_ref,
-                                                                            nodes_mem_train_ref, K, T_train,
+            motif_test_dict = accuracy_test.simulate_count_motif_experiment(dataset_motif_tup,
+                                                                            fit_param_ref,
+                                                                            nodes_mem_train_ref, K,
+                                                                            T_train,
                                                                             motif_delta_month,
                                                                             n_sim=n_motif_simulations,
                                                                             verbose=PRINT_DETAILS)
@@ -182,8 +191,7 @@ if __name__ == "__main__":
                 with open(pickle_file_name, 'wb') as f:
                     pickle.dump(motif_test_dict, f)
 
-
-        #%% Link prediction experiment
+        # %% Link prediction experiment
         if link_prediction_experiment:
             print("\n\nLink Prediction Experiment at delta=", link_pred_delta)
 
@@ -210,7 +218,8 @@ if __name__ == "__main__":
             print(f"-> at K={K}: average AUC={np.average(auc):.5f}, std={auc.std():.3f}")
 
             if save_link:
-                auc_dict = {"t0": t0s, "auc": auc, "avg": np.average(auc), "std": auc.std(), "y__runs": y_runs,
+                auc_dict = {"t0": t0s, "auc": auc, "avg": np.average(auc), "std": auc.std(),
+                            "y__runs": y_runs,
                             "pred_runs": pred_runs, "ll_test": ll_test_event_ref}
                 pickle_file_name = f"MID_link_pred_auc_k_{K}.p"
                 with open(pickle_file_name, 'wb') as f:

@@ -22,8 +22,7 @@ from utils_fit_refine_mulch import fit_refinement_mulch
 from utils_fit_bp import cal_num_events
 
 
-
-#%% helper functions
+# %% helper functions
 def arrage_fit_param(param, n_alpha, K, node_mem_true, node_mem_fit, betas):
     # arrange fit_parameters before print
     ar = [None] * K
@@ -40,11 +39,12 @@ def arrage_fit_param(param, n_alpha, K, node_mem_true, node_mem_fit, betas):
     arranged_fit_param.append(betas)
     return arranged_fit_param
 
+
 def get_simulation_params(n_classes, assortative):
-    if assortative: # assortative mixing - more events between diagonal block pairs
+    if assortative:  # assortative mixing - more events between diagonal block pairs
         theta_dia = [0.008, 0.3, 0.3, 0.002, 0.0005, 0.001, 0.0005]
         theta_off = [0.008, 0.1, 0.1, 0.001, 0.0001, 0.001, 0.0001]
-    else: # dissortative mixing - more events between off-diagonal block pairs
+    else:  # dissortative mixing - more events between off-diagonal block pairs
         theta_off = [0.008, 0.3, 0.3, 0.002, 0.0005, 0.001, 0.0005]
         theta_dia = [0.008, 0.1, 0.1, 0.001, 0.0001, 0.001, 0.0001]
 
@@ -73,12 +73,15 @@ def get_simulation_params(n_classes, assortative):
     betas_recip = np.array([7 * 2, 1, 1 / 12])  # [2week, 1day, 2hour]
     betas = np.reciprocal(betas_recip)
 
-    param = (mu_sim, alpha_s_sim, alpha_r_sim, alpha_tc_sim, alpha_gr_sim, alpha_al_sim, alpha_alr_sim, C_sim, betas)
+    param = (
+    mu_sim, alpha_s_sim, alpha_r_sim, alpha_tc_sim, alpha_gr_sim, alpha_al_sim, alpha_alr_sim,
+    C_sim, betas)
 
     return param
 
-#%% simulation accuracy tests
-def spectral_clustering_accuracy(n_run = 10, verbose=False, plot=False):
+
+# %% simulation accuracy tests
+def spectral_clustering_accuracy(n_run=10, verbose=False, plot=False):
     """
     evaluate spectral clustering accuracy as both n, T increase
 
@@ -100,10 +103,9 @@ def spectral_clustering_accuracy(n_run = 10, verbose=False, plot=False):
     N_range = np.arange(40, 101, 15)
     T_range = np.arange(60, 241, 45)
 
-
-
     RI = np.zeros((len(N_range), len(T_range)))  # hold RI scores while varying n_nodes & duration
-    n_events_matrix = np.zeros((len(N_range), len(T_range)))  # hold simulated n_events while varying n_nodes & duration
+    n_events_matrix = np.zeros(
+        (len(N_range), len(T_range)))  # hold simulated n_events while varying n_nodes & duration
     for T_idx, T in enumerate(T_range):
         for N_idx, N in enumerate(N_range):
             if verbose:
@@ -117,7 +119,8 @@ def spectral_clustering_accuracy(n_run = 10, verbose=False, plot=False):
                 # if it == 0 and verbose:
                 #     fit_model.plot_adj(agg_adj, node_mem_true, K, f"N={N}, T={T}")
                 #     print("\t\t#events=", n_events)
-                node_mem_spectral = fit_model.spectral_cluster1(agg_adj, K, n_kmeans_init=500, normalize_z=True,
+                node_mem_spectral = fit_model.spectral_cluster1(agg_adj, K, n_kmeans_init=500,
+                                                                normalize_z=True,
                                                                 multiply_s=True)
                 rand_i = adjusted_rand_score(node_mem_true, node_mem_spectral)
                 if verbose:
@@ -146,12 +149,11 @@ def spectral_clustering_accuracy(n_run = 10, verbose=False, plot=False):
         ax.set_xticks(np.arange(5) + 0.5)
         ax.set_xticklabels(results_dict['N_range'])
         ax.set_yticks(np.arange(5) + 0.5)
-        ax.set_yticklabels(results_dict['T_range']/30)
+        ax.set_yticklabels(results_dict['T_range'] / 30)
         ax.set_xlabel('number of nodes n')
         ax.set_ylabel('duration T (month)')
         fig.colorbar(c, ax=ax)
         ax.set_title('Spectral Clustering - Adjusted Rand Index')
-
 
     return results_dict
 
@@ -227,12 +229,14 @@ def parameters_estimation_MSE(fixed_n=True, n_run=10, verbose=False, plot=False)
                 n_events = cal_num_events(events_dict)
                 agg_adj = fit_model.event_dict_to_aggregated_adjacency(n, events_dict)
                 # run spectral clustering
-                node_mem_spectral = fit_model.spectral_cluster1(agg_adj, K, n_kmeans_init=500, normalize_z=True,
+                node_mem_spectral = fit_model.spectral_cluster1(agg_adj, K, n_kmeans_init=500,
+                                                                normalize_z=True,
                                                                 multiply_s=True)
                 rand_i = adjusted_rand_score(node_mem_true, node_mem_spectral)
                 if verbose:
                     print(f"\t\titer# {it}: RI={rand_i:.3f}, #events={n_events}")
-                fit_param, ll_train, _ = fit_model.model_fit(n_alpha, events_dict, node_mem_spectral, K, T,
+                fit_param, ll_train, _ = fit_model.model_fit(n_alpha, events_dict,
+                                                             node_mem_spectral, K, T,
                                                              betas)
                 MSE_mu[it] = np.sum(np.square(sim_param[0] - fit_param[0]))
                 MSE_alpha_s[it] = np.sum(np.square(sim_param[1] - fit_param[1]))
@@ -263,10 +267,12 @@ def parameters_estimation_MSE(fixed_n=True, n_run=10, verbose=False, plot=False)
 
     results_dict = {}
     results_dict["sim_param"] = sim_param
-    results_dict["MSE_mean"] = (mMSE_mu, mMSE_alpha_s, mMSE_alpha_r, mMSE_alpha_tc, mMSE_alpha_gr, mMSE_alpha_al
-                                , mMSE_alpha_alr, mMSE_C)
-    results_dict["MSE_std"] = (sMSE_mu, sMSE_alpha_s, sMSE_alpha_r, sMSE_alpha_tc, sMSE_alpha_gr, sMSE_alpha_al
-                               , sMSE_alpha_alr, sMSE_C)
+    results_dict["MSE_mean"] = (
+    mMSE_mu, mMSE_alpha_s, mMSE_alpha_r, mMSE_alpha_tc, mMSE_alpha_gr, mMSE_alpha_al
+    , mMSE_alpha_alr, mMSE_C)
+    results_dict["MSE_std"] = (
+    sMSE_mu, sMSE_alpha_s, sMSE_alpha_r, sMSE_alpha_tc, sMSE_alpha_gr, sMSE_alpha_al
+    , sMSE_alpha_alr, sMSE_C)
     results_dict["N_range"] = n_range
     results_dict["T_range"] = T_range
     results_dict["n_run"] = n_run
@@ -277,10 +283,10 @@ def parameters_estimation_MSE(fixed_n=True, n_run=10, verbose=False, plot=False)
         if fixed_n:
             for i in range(len(labels)):
                 fig, ax = plt.subplots(figsize=(5, 4))
-                ax.bar(results_dict['T_range']/30, results_dict['MSE_mean'][i].ravel(),
+                ax.bar(results_dict['T_range'] / 30, results_dict['MSE_mean'][i].ravel(),
                        yerr=results_dict['MSE_std'][i].ravel() / np.sqrt(results_dict['n_run']))
-                ax.set_xticks(results_dict['T_range']/30)
-                ax.set_xticklabels(results_dict['T_range']/30)
+                ax.set_xticks(results_dict['T_range'] / 30)
+                ax.set_xticklabels(results_dict['T_range'] / 30)
                 ax.set_xlabel('duration T (month)')
                 ax.set_ylabel('mean-squared error')
                 ax.set_title(f'{labels[i]} at Fixed n={results_dict["N_range"][0]}')
@@ -289,7 +295,8 @@ def parameters_estimation_MSE(fixed_n=True, n_run=10, verbose=False, plot=False)
             for i in range(len(labels)):
                 fig, ax = plt.subplots(figsize=(5, 4))
                 ax.bar(results_dict['N_range'], results_dict['MSE_mean'][i].ravel(),
-                       yerr=results_dict['MSE_std'][i].ravel() / np.sqrt(results_dict['n_run']), width=5,
+                       yerr=results_dict['MSE_std'][i].ravel() / np.sqrt(results_dict['n_run']),
+                       width=5,
                        color='grey')
                 ax.set_xticks(results_dict['N_range'])
                 ax.set_xticklabels(results_dict['N_range'])
@@ -300,7 +307,7 @@ def parameters_estimation_MSE(fixed_n=True, n_run=10, verbose=False, plot=False)
     return results_dict
 
 
-def refinement_accuracy(fixed_n=True, max_refine_iter = 7, n_run = 10, verbose=False, plot=False):
+def refinement_accuracy(fixed_n=True, max_refine_iter=7, n_run=10, verbose=False, plot=False):
     """ Nodes membership accuracy after running log-likelihood alg
 
     simulate networks from MULCH at K=4 & #excitations=6, then compute adjusted rand
@@ -352,7 +359,8 @@ def refinement_accuracy(fixed_n=True, max_refine_iter = 7, n_run = 10, verbose=F
                     print(f"\titer {it}: #simulated events={n_events_all}")
                 # agg_adj = mulch_fit.event_dict_to_aggregated_adjacency(N, events_dict)
                 # MBHP.plot_adj(agg_adj, nodes_mem_true, K, "True membership")
-                sp, ref, m = fit_refinement_mulch(events_dict, N, T, K, betas, n_alpha, max_refine_iter,
+                sp, ref, m = fit_refinement_mulch(events_dict, N, T, K, betas, n_alpha,
+                                                  max_refine_iter,
                                                   nodes_mem_true=nodes_mem_true, verbose=verbose)
                 ri_sp = adjusted_rand_score(nodes_mem_true, sp[0])
                 ri_ref = adjusted_rand_score(nodes_mem_true, ref[0])
@@ -384,26 +392,34 @@ def refinement_accuracy(fixed_n=True, max_refine_iter = 7, n_run = 10, verbose=F
     if plot:
         if fixed_n:
             fig, ax = plt.subplots(figsize=(5, 4))
-            ax.errorbar(results_dict['T_range'], results_dict['RI_sp'].ravel(), fmt='k.-', markersize=7
-                        , yerr=np.std(results_dict['RI_sp_runs'], axis=2).ravel() / np.sqrt(results_dict['runs'])
+            ax.errorbar(results_dict['T_range'], results_dict['RI_sp'].ravel(), fmt='k.-',
+                        markersize=7
+                        , yerr=np.std(results_dict['RI_sp_runs'], axis=2).ravel() / np.sqrt(
+                    results_dict['runs'])
                         , elinewidth=1, label='spectral clustering')
-            ax.errorbar(results_dict['T_range'], results_dict['RI_ref'].ravel(), fmt='g.-', markersize=7
-                        , yerr=np.std(results_dict['RI_ref_runs'], axis=2).ravel() / np.sqrt(results_dict['runs'])
+            ax.errorbar(results_dict['T_range'], results_dict['RI_ref'].ravel(), fmt='g.-',
+                        markersize=7
+                        , yerr=np.std(results_dict['RI_ref_runs'], axis=2).ravel() / np.sqrt(
+                    results_dict['runs'])
                         , elinewidth=1, label='refinement')
             plt.legend()
             plt.ylim([0, 1.05])
             ax.set_xlabel('duration T (month)')
             ax.set_ylabel('adjusted rand index')
             ax.set_xticks(results_dict['T_range'])
-            ax.set_xticklabels(results_dict['T_range']/30)
+            ax.set_xticklabels(results_dict['T_range'] / 30)
             ax.set_title(f'fixed N={results_dict["N_range"][0]}')
         else:
             fig, ax = plt.subplots(figsize=(5, 4))
-            ax.errorbar(results_dict['N_range'], results_dict['RI_sp'].ravel(), fmt='k.-', markersize=7
-                        , yerr=np.std(results_dict['RI_sp_runs'], axis=2).ravel() / np.sqrt(results_dict['runs'])
+            ax.errorbar(results_dict['N_range'], results_dict['RI_sp'].ravel(), fmt='k.-',
+                        markersize=7
+                        , yerr=np.std(results_dict['RI_sp_runs'], axis=2).ravel() / np.sqrt(
+                    results_dict['runs'])
                         , elinewidth=1, label='spectral clustering')
-            ax.errorbar(results_dict['N_range'], results_dict['RI_ref'].ravel(), fmt='g.-', markersize=7
-                        , yerr=np.std(results_dict['RI_ref_runs'], axis=2).ravel() / np.sqrt(results_dict['runs'])
+            ax.errorbar(results_dict['N_range'], results_dict['RI_ref'].ravel(), fmt='g.-',
+                        markersize=7
+                        , yerr=np.std(results_dict['RI_ref_runs'], axis=2).ravel() / np.sqrt(
+                    results_dict['runs'])
                         , elinewidth=1, label='refinement')
             plt.legend()
             plt.ylim([0, 1.05])
@@ -415,7 +431,8 @@ def refinement_accuracy(fixed_n=True, max_refine_iter = 7, n_run = 10, verbose=F
 
     return results_dict
 
-#%% Main
+
+# %% Main
 
 if __name__ == "__main__":
     np.set_printoptions(suppress=True)
