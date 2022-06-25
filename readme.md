@@ -76,23 +76,18 @@ git submodule init
 git submodule update
 ```
 
-### Dependencies
-
+#### Submodules
 - CHIP model's code is added as a submodule in the directory `CHIP-Network-Model`.
-- `DyNetworkX` package, used for motif count experiments, is also included as a directory.
-- Modified `hawkes` repository by Steve Morse for model simulation (included as a directory).
 
-### Requirements
+#### Dependancies
+- `DyNetworkX` package, used for motif count experiments. To install, use:
+`pip install DyNetworkX`
+- Modified `hawkes` repository by Steve Morse for MULCH simulation (included as a directory).
 
-numpy >= 1.18.1  
-scipy >= 1.4.1  
-matplotlib >= 3.2.1  
-networkx >=2.5  
-scikit-learn >=0.23.1  
-sortedcontainers >=2.2.2  
-tick >= 0.6.0
+#### Requirements
+Refer to [requirements.txt](requirements.txt) for the required packages.
 
-Note: `tick`'s package is only need for ADM4 test.
+Note: We also used `tick==0.6.0` package for ADM4 model fitting tests.
 
 --------------------------------------------------------------------
 

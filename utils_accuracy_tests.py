@@ -14,7 +14,8 @@ import matplotlib.pyplot as plt
 from utils_fit_bp import cal_num_events
 from utils_fit_model import event_dict_to_adjacency
 from utils_generate_model import simulate_mulch
-from dynetworkx import ImpulseDiGraph
+from dynetworkx import ImpulseDiGraph, count_temporal_motif
+
 
 
 # %% motif counts functions
@@ -62,7 +63,7 @@ def cal_recip_trans_motif(events_dict, n, motif_delta, verbose=False):
     dataset_motif = np.zeros((6, 6), dtype=int)
     for i in range(6):
         for j in range(6):
-            dataset_motif[i, j] = G_data.calculate_temporal_motifs(motifs[i][j], motif_delta)
+            dataset_motif[i, j] = count_temporal_motif(G_data, motifs[i][j], motif_delta)
         if verbose:
             print(
                 f"{dataset_motif[i, 0]:>10}{dataset_motif[i, 1]:>10}{dataset_motif[i, 2]:>10}{dataset_motif[i, 3]:>10}"

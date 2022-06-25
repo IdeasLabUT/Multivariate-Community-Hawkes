@@ -120,8 +120,8 @@ if __name__ == "__main__":
         if PRINT_DETAILS:
             print("\n->Analyzing refinement node membership: Counties in each block")
             fit_model.analyze_block(nodes_mem_train_ref, K, id_node_map_train)
-            print("Plotting fit parameters")
-            fit_model.plot_mulch_param(fit_param_ref, n_alpha)
+            # print("Plotting fit parameters")
+            # fit_model.plot_mulch_param(fit_param_ref, n_alpha)
 
         if save_fit:
             fit_dict = {}
