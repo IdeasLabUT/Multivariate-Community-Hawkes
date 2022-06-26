@@ -49,6 +49,7 @@ if __name__ == "__main__":
     # betas_recip = np.array([30])* (1000 / 8380)   # [1 month]
     betas = np.reciprocal(betas_recip)
     save_fit = False  # pickle MULCH fit parameters
+    plot_fit_param = False  # plot learned mu and alpha parameters (Section 6: Case Study in paper)
 
     """ Simulation count motifs experiment"""
     motif_experiment = True
@@ -120,8 +121,9 @@ if __name__ == "__main__":
         if PRINT_DETAILS:
             print("\n->Analyzing refinement node membership: Counties in each block")
             fit_model.analyze_block(nodes_mem_train_ref, K, id_node_map_train)
-            # print("Plotting fit parameters")
-            # fit_model.plot_mulch_param(fit_param_ref, n_alpha)
+            if plot_fit_param:
+                print("Plotting fit parameters")
+                fit_model.plot_mulch_param(fit_param_ref, n_alpha)
 
         if save_fit:
             fit_dict = {}

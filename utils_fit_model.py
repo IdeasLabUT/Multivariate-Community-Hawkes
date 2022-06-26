@@ -722,7 +722,7 @@ def analyze_block(node_mem, K, id_node_map):
     :param id_node_map: dictionary {node_id : node_name}
     :return: None
     """
-    print(np.histogram(node_mem, bins=K))
+    # print(np.histogram(node_mem, bins=K))
     for i in range(K):
         print(f"Block {i}")
         nodes_in_class_i = np.where(node_mem == i)[0]
