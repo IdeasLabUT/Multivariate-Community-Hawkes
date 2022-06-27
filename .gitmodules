@@ -1,0 +1,3 @@
+[submodule "CHIP-Network-Model"]
+	path = CHIP-Network-Model
+	url = https://github.com/IdeasLabUT/CHIP-Network-Model.git
