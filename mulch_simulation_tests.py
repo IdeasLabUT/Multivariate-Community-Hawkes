@@ -1,4 +1,4 @@
-"""Simulated Networks MULCH Experiments (Section 5.1)
+"""Simulated Networks MULCH Experiments (Section 5.1 & Appendix B.2)
 
 This script tests the ability of both spectral clustering and our
 likelihood refinement procedure to recover true node memberships

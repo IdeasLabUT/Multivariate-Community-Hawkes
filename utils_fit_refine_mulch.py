@@ -133,7 +133,9 @@ def fit_refinement_mulch(events_dict, n, end_time, K, betas, n_alpha=6, max_ref_
 
 
 def cal_new_event_dict_move_node(idx, from_block, to_block, events_dict_bp, K):
-    """ calculate new per block_pair events_dict of moving one node (idx) from one block to another """
+    """ calculate new per block_pair events_dict
+
+    (K, K) events dictionary per block pair after moving one node from one block to another """
     events_dict_bp1 = copy.deepcopy(events_dict_bp)
     # move node pair from (a,*) to (b,*)
     for k in range(K):
@@ -152,7 +154,10 @@ def cal_new_event_dict_move_node(idx, from_block, to_block, events_dict_bp, K):
 
 def cal_new_LL_move_node(param_tup, T, idx, from_block, to_block, events_dict_bp, n_K, LL_bp,
                          batch=True):
-    """ calculate new per block_pair log-likelihoods of moving one node (idx) from one block to another """
+    """ calculate new per block_pair log-likelihoods (K,K)
+
+    new (K, K) log-likelihood for each block pair after moving one node (idx) from one block
+    to another """
     K = len(n_K)
     if len(param_tup) == 9:
         mu_bp, alpha_s_bp, alpha_r_bp, alpha_tc_bp, alpha_gr_bp, alpha_al_bp, alpha_alr_bp, C_bp, betas = param_tup

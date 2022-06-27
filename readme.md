@@ -51,7 +51,7 @@ paper [MULCH](https://arxiv.org/abs/2205.00639 "The Multivariate Community Hawke
     3. MULCH parameters estimation accuracy
 
 - `mulch_MID_test.py` fits MULCH on MID dataset, then runs some evaluation performance
-  experiments (subsection 5.2). A code snippet from this file is discussed in the *Usage
+  experiments (subsection 5.2 & Section 6). A code snippet from this file is discussed in the *Usage
   Instructions* section below.
 
 - `mulch_datasets_experiments.py` Fit MULCH on Reality Mining, Enron, Facebook datasets, and
@@ -168,4 +168,5 @@ ll_all, n_events_all = utils_fit_model.log_likelihood_mulch(fit_param, events_di
 ```
 
 See `mulch_MID_test.py` for the complete MID fitting code, and performance evaluation experiments.
+This file contains code to replicate our case study in section 6 in out paper.
 

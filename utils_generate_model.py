@@ -23,9 +23,11 @@ def simulate_mulch(sim_param, n_nodes, n_classes, p, duration):
     :param tuple sim_param: MULCH parameters (mu_bp, alphas_1_bp, .., alpha_n_bp, C_bp, betas )
     :param n_nodes: number nodes in network (n)
     :param n_classes: number of blocks
-    :param p: (K,) array of class membership probabilities (should sum to one) - ex: np.array([0.1, 0.4, 0.5])
+    :param p: (K,) array of class membership probabilities (should sum to one)
+        ex: np.array([0.1, 0.4, 0.5])
     :param duration: network duration (T)
-    :return: tuple of (events_dict, nodes_membership). (events_dict): dataset formatted as a dictionary
+    :return: tuple of (events_dict, nodes_membership), where,
+        (events_dict): dataset formatted as a dictionary
         {(u, v) node pairs in network : [t1, t2, ...] array of events between (u, v)}.
         (nodes_membership): (n,) array of block membership of each node.
     """

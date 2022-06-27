@@ -497,8 +497,8 @@ def read_csv_split_train(data_file_name, delimiter, remove_not_train=False, spli
     :param str data_file_name: csv file path
     :param str delimiter: delimiter to use for reading file
     :param float split_ratio: (optional) train:test ratio, choose between [0, 1]. Default=0.8
-    :param remove_not_train: (optional) if True, remove nodes (and corresponding events) that appeared in test set but
-        not in train.
+    :param remove_not_train: (optional) if True, remove nodes (and corresponding events) that
+        appeared in test set but not in train.
     :param timestamp_max: (optional) scale network's timestamps between [0, timestamp_max].
         Default=1000 (used in all MULCH dataset experiments)
     :return: train_tuple, full_tuple, nodes_not_in_train.
