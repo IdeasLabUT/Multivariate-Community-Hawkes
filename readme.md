@@ -31,8 +31,8 @@ We consider 6 types of excitations for each block pair, which are listed in the 
 
 ### Toy Example
 
-Toy network of 8 nodes to illustrate the different excitations in MULCH. Nodes 1~5 are in block *
-a*, while nodes 6~8 are in block b. The event between *(1, 8)* (dashed line) excites the processes
+Toy network of 8 nodes to illustrate the different excitations in MULCH. Nodes 1:5 are in block 
+*a*, while nodes 6:8 are in block *b*. The event between *(1, 8)* (dashed line) excites the processes
 of the other node pairs shown in solid lines by the specified excitation value *ab* or *ba*.
 ![Toy Network](storage/images/toy_network.png)
 
